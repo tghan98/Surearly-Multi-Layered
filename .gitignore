@@ -1,0 +1,13 @@
+# IAR build output (auto-generated)
+*.dep
+EWSTM8/Debug/
+
+# IAR user/session state
+EWSTM8/settings/
+*.dni
+*.wsdt
+*.dnx
+
+# OS / editor
+Thumbs.db
+.DS_Store

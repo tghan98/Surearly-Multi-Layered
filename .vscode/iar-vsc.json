@@ -1,0 +1,18 @@
+{
+  "workspace": {
+    "path": "${workspaceFolder}\\EWSTM8\\MFx_Layered.eww"
+  },
+  "workspaces": {
+    "${workspaceFolder}\\EWSTM8\\MFx_Layered.eww": {
+      "configs": {
+        "${workspaceFolder}\\EWSTM8\\MFx_Layered.ewp": "Debug"
+      },
+      "selected": {
+        "path": "${workspaceFolder}\\EWSTM8\\MFx_Layered.ewp"
+      }
+    }
+  },
+  "workbench": {
+    "path": "C:\\Program Files (x86)\\IAR Systems\\Embedded Workbench 8.3"
+  }
+}
