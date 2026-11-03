@@ -98,6 +98,22 @@ Ret_t HW_UART_Write(HW_UART_Id tId, const uint8_t *p_bBuf, uint16_t wLen)
     return RET_OK;
 }
 
+Ret_t HW_UART_TryWriteByte(HW_UART_Id tId, uint8_t bData)
+{
+    if ((uint8_t)tId >= (uint8_t)HW_UART_COUNT)
+    {
+        return RET_ERR_PARAM;
+    }
+    if (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET)
+    {
+        return RET_BUSY;
+    }
+
+    USART_SendData8(USART1, bData);
+
+    return RET_OK;
+}
+
 Ret_t HW_UART_Read(HW_UART_Id tId, uint8_t *p_bBuf, uint16_t wMax,
                    uint16_t *p_wLen)
 {

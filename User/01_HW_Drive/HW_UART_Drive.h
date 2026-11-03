@@ -71,6 +71,18 @@ Ret_t HW_UART_Init(void);
 Ret_t HW_UART_Write(HW_UART_Id tId, const uint8_t *p_bBuf, uint16_t wLen);
 
 /**
+  * @brief  Hands one byte to the transmitter if it is free.
+  * @param  tId   : port
+  * @param  bData : byte to send
+  * @note   Layer: HW Driver. Blocking: no. ISR: no.
+  *         For callers that stream a long reply across main-loop passes
+  *         instead of waiting for it.
+  * @retval RET_OK (accepted), RET_BUSY (shift register still full),
+  *         RET_ERR_PARAM
+  */
+Ret_t HW_UART_TryWriteByte(HW_UART_Id tId, uint8_t bData);
+
+/**
   * @brief  Takes whatever the ring buffer holds, up to wMax bytes.
   * @param  tId     : port
   * @param  p_bBuf  : destination, must not be NULL

@@ -1714,6 +1714,18 @@
         </group>
         <group>
             <name>02_Module</name>
+            <file>
+                <name>$PROJ_DIR$\..\User\02_Module\Optic.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\User\02_Module\Lcd.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\User\02_Module\Eeprom.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\User\02_Module\PcComm.c</name>
+            </file>
         </group>
         <group>
             <name>03_App</name>

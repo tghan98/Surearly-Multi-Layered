@@ -13,6 +13,10 @@
 #include "HW_CLK_Drive.h"
 #include "HW_GPIO_Drive.h"
 #include "HW_Tick_Drive.h"
+#include "Eeprom.h"
+#include "Lcd.h"
+#include "PcComm.h"
+#include "Optic.h"
 #include "stm8l15x.h"
 #include "stm8l15x_rst.h"
 
@@ -26,6 +30,17 @@
 
 #ifndef SYS_USE_WDG
 #define SYS_USE_WDG              0
+#endif
+
+/* TEMPORARY: proof of life. The BOOK icon blinks at 500 ms so that a board
+   test can confirm clock, tick, slots, GPIO and LCD drive at once, and so
+   that the TIM4 rate can be calibrated with a stopwatch (60 s should give
+   60 blinks). Remove once the App drives the display. */
+#ifndef SYS_USE_BLINK_TEST
+#define SYS_USE_BLINK_TEST       1
+#endif
+#if ((SYS_USE_BLINK_TEST != 0) && (SYS_USE_BLINK_TEST != 1))
+#error "SYS_USE_BLINK_TEST must be 0 or 1"
 #endif
 #if ((SYS_USE_WDG != 0) && (SYS_USE_WDG != 1))
 #error "SYS_USE_WDG must be 0 or 1"
@@ -106,6 +121,10 @@ static void s_Slot1ms(void)
 static void s_Slot10ms(void)
 {
     /* Slow modules and Apps go here. Apps run in SYS_STATE_RUN only. */
+    (void)Optic_Process();
+    (void)Lcd_Process();
+    (void)Eeprom_Process();
+    (void)PcComm_Process();
 }
 
 static void s_StateMachine(void)
@@ -173,7 +192,36 @@ Ret_t System_Main_Init(void)
         s_sys.bInitErr |= SYS_INIT_ERR_GPIO;
     }
 
-    /* 3. Module: outputs to a safe state, then comms, storage, the rest. */
+    /* 3. Module: outputs to a safe state first (LEDs off), then the rest. */
+    tRet = Optic_Init();
+    if (tRet != RET_OK)
+    {
+        s_sys.bInitErr |= SYS_INIT_ERR_OPTIC;
+    }
+
+    tRet = Lcd_Init();
+    if (tRet != RET_OK)
+    {
+        s_sys.bInitErr |= SYS_INIT_ERR_LCD;
+    }
+
+    tRet = Eeprom_Init();
+    if (tRet != RET_OK)
+    {
+        s_sys.bInitErr |= SYS_INIT_ERR_EEPROM;
+    }
+
+    tRet = PcComm_Init();
+    if (tRet != RET_OK)
+    {
+        s_sys.bInitErr |= SYS_INIT_ERR_PCCOMM;
+    }
+
+#if (SYS_USE_BLINK_TEST == 1)
+    /* TEMPORARY: see the build switch block above. */
+    (void)Lcd_SetIcon(LCD_ICON_BOOK, LCD_BLINK);
+#endif
+
     /* 4. App: parameters, command gate, control. */
 
     /* 5. Slot timestamps, so the first pass is not reported as late. */
