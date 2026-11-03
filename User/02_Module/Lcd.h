@@ -28,6 +28,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "HW_Ret_Code.h"
+#include "HW_Tick_Drive.h"   /* HW_TICK_MS(), HW_TICK_WAIT_MS() */
 
 /* Exported types ------------------------------------------------------------*/
 typedef enum
@@ -48,8 +49,8 @@ typedef enum
 } Lcd_State;
 
 /* Exported constants --------------------------------------------------------*/
-#define LCD_REFRESH_MS           10u    /* COM toggle period */
-#define LCD_BLINK_HALF_MS        500u   /* old LCD_BLINK_INTERVAL_MS */
+#define LCD_REFRESH_TK           HW_TICK_MS(10u)   /* COM toggle period */
+#define LCD_BLINK_HALF_TK        HW_TICK_MS(500u)  /* old LCD_BLINK_INTERVAL_MS */
 
 /* API -----------------------------------------------------------------------*/
 /**

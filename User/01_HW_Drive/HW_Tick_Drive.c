@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    : HW_Tick_Drive.c
-  * @brief   : HW Driver layer - 1 ms system time base (TIM4)
+  * @brief   : HW Driver layer - 10 ms system time base (TIM4)
   ******************************************************************************
   */
 
@@ -12,13 +12,14 @@
 #include "stm8l15x_tim4.h"
 
 /* Private defines -----------------------------------------------------------*/
-/* TEMPORARY: nominal value, see the note in HW_Tick_Drive.h. */
-#define HW_TICK_PRESCALER        TIM4_Prescaler_8
-#define HW_TICK_ARR              249u
+/* 149, not the nominal 155: fMASTER runs about 4 % slow. Inherited from the
+   shipped FW, see the note in HW_Tick_Drive.h. */
+#define HW_TICK_PRESCALER        TIM4_Prescaler_128
+#define HW_TICK_ARR              149u
 
 /* Private variables ---------------------------------------------------------*/
 /* Written by HW_Tick_Isr() only, read by the main loop. */
-static volatile uint32_t s_dwTickMs = 0uL;
+static volatile uint16_t s_wTick = 0u;
 
 /* Functions -----------------------------------------------------------------*/
 Ret_t HW_Tick_Init(void)
@@ -33,58 +34,58 @@ Ret_t HW_Tick_Init(void)
     return RET_OK;
 }
 
-uint32_t HW_Tick_Get(void)
+uint16_t HW_Tick_Get(void)
 {
-    uint32_t dwFirst;
-    uint32_t dwSecond;
+    uint16_t wFirst;
+    uint16_t wSecond;
 
-    /* 32-bit value on an 8-bit core: the ISR may land between byte reads,
+    /* 16-bit value on an 8-bit core: the ISR may land between byte reads,
        so read until two consecutive reads agree. */
     do
     {
-        dwFirst  = s_dwTickMs;
-        dwSecond = s_dwTickMs;
-    } while (dwFirst != dwSecond);
+        wFirst  = s_wTick;
+        wSecond = s_wTick;
+    } while (wFirst != wSecond);
 
-    return dwFirst;
+    return wFirst;
 }
 
-uint32_t HW_Tick_Elapsed(uint32_t dwStart)
+uint16_t HW_Tick_Elapsed(uint16_t wStart)
 {
-    return (uint32_t)(HW_Tick_Get() - dwStart);
+    return (uint16_t)(HW_Tick_Get() - wStart);
 }
 
-HW_Tick_Due HW_Tick_IsDue(uint32_t *p_dwLast, uint32_t dwPeriodMs)
+HW_Tick_Due HW_Tick_IsDue(uint16_t *p_wLast, uint16_t wPeriod)
 {
-    uint32_t    dwNow;
-    uint32_t    dwDiff;
+    uint16_t    wNow;
+    uint16_t    wDiff;
     HW_Tick_Due tDue;
 
-    if (p_dwLast == NULL)
+    if (p_wLast == NULL)
     {
         return HW_TICK_NOT_DUE;
     }
-    if (dwPeriodMs == 0uL)
+    if (wPeriod == 0u)
     {
         return HW_TICK_NOT_DUE;
     }
 
-    dwNow  = HW_Tick_Get();
-    dwDiff = (uint32_t)(dwNow - *p_dwLast);
+    wNow  = HW_Tick_Get();
+    wDiff = (uint16_t)(wNow - *p_wLast);
 
-    if (dwDiff < dwPeriodMs)
+    if (wDiff < wPeriod)
     {
         tDue = HW_TICK_NOT_DUE;
     }
-    else if (dwDiff < (dwPeriodMs + dwPeriodMs))
+    else if (wDiff < (uint16_t)(wPeriod + wPeriod))
     {
-        *p_dwLast += dwPeriodMs;
+        *p_wLast += wPeriod;
         tDue = HW_TICK_DUE;
     }
     else
     {
         /* Two or more periods late: do not catch up, resynchronise. */
-        *p_dwLast = dwNow;
+        *p_wLast = wNow;
         tDue = HW_TICK_DUE_LATE;
     }
 
@@ -93,7 +94,7 @@ HW_Tick_Due HW_Tick_IsDue(uint32_t *p_dwLast, uint32_t dwPeriodMs)
 
 void HW_Tick_Isr(void)
 {
-    s_dwTickMs++;
+    s_wTick++;
     TIM4_ClearITPendingBit(TIM4_IT_Update);
 }
 

@@ -17,6 +17,7 @@
 #include "Lcd.h"
 #include "PcComm.h"
 #include "APP_DATA_Record.h"
+#include "APP_CTRL_Cmd.h"
 #include "APP_CTRL_Sequence.h"
 #include "APP_EXEC_Measure.h"
 #include "Optic.h"
@@ -50,7 +51,7 @@ typedef struct
     System_State tState;
     uint8_t      bInitErr;
     uint8_t      bResetCause;
-    uint32_t     adwSlotLast[SYS_SLOT_COUNT];
+    uint16_t     awSlotLast[SYS_SLOT_COUNT];
 #if (SYS_USE_SLOT_STAT == 1)
     System_SlotStat atSlotStat[SYS_SLOT_COUNT];
 #endif
@@ -60,8 +61,7 @@ typedef struct
 static System_Ctx s_sys;
 
 /* Private function prototypes -----------------------------------------------*/
-static void s_RunSlot(System_Slot tSlot, uint32_t dwPeriodMs);
-static void s_Slot1ms(void);
+static void s_RunSlot(System_Slot tSlot, uint16_t wPeriod);
 static void s_Slot10ms(void);
 static void s_StateMachine(void);
 #if (SYS_USE_SLOT_STAT == 1)
@@ -80,11 +80,11 @@ static void s_StatCount(uint16_t *p_wCounter)
 }
 #endif
 
-static void s_RunSlot(System_Slot tSlot, uint32_t dwPeriodMs)
+static void s_RunSlot(System_Slot tSlot, uint16_t wPeriod)
 {
     HW_Tick_Due tDue;
 
-    tDue = HW_Tick_IsDue(&s_sys.adwSlotLast[tSlot], dwPeriodMs);
+    tDue = HW_Tick_IsDue(&s_sys.awSlotLast[tSlot], wPeriod);
 
     if (tDue == HW_TICK_NOT_DUE)
     {
@@ -99,21 +99,10 @@ static void s_RunSlot(System_Slot tSlot, uint32_t dwPeriodMs)
     }
 #endif
 
-    /* Direct calls, no function pointer table: the execution order stays
+    /* Direct call, no function pointer table: the execution order stays
        visible in the source and the stack analysis stays exact (spec §5-3). */
-    if (tSlot == SYS_SLOT_1MS)
-    {
-        s_Slot1ms();
-    }
-    else
-    {
-        s_Slot10ms();
-    }
-}
-
-static void s_Slot1ms(void)
-{
-    /* Time critical modules go here. */
+    (void)tSlot;
+    s_Slot10ms();
 }
 
 static void s_Slot10ms(void)
@@ -131,6 +120,7 @@ static void s_Slot10ms(void)
     /* Apps run in RUN only (spec v2.0.3 §5-3). */
     if (s_sys.tState == SYS_STATE_RUN)
     {
+        (void)APP_CTRL_Cmd_Process();
         (void)APP_CTRL_Sequence_Process();
     }
 }
@@ -234,6 +224,7 @@ Ret_t System_Main_Init(void)
 
     (void)APP_EXEC_Measure_Init();
     (void)APP_CTRL_Sequence_Init();
+    (void)APP_CTRL_Cmd_Init();
 
 
     /* 4. App: parameters, command gate, control. */
@@ -241,7 +232,7 @@ Ret_t System_Main_Init(void)
     /* 5. Slot timestamps, so the first pass is not reported as late. */
     for (bSlot = 0u; bSlot < (uint8_t)SYS_SLOT_COUNT; bSlot++)
     {
-        s_sys.adwSlotLast[bSlot] = HW_Tick_Get();
+        s_sys.awSlotLast[bSlot] = HW_Tick_Get();
     }
 
     enableInterrupts();
@@ -253,8 +244,7 @@ Ret_t System_Main_Run(void)
 {
     /* Every pass: communication RX parse, storage, command dispatch. */
 
-    s_RunSlot(SYS_SLOT_1MS,  SYS_SLOT_1MS_PERIOD_MS);
-    s_RunSlot(SYS_SLOT_10MS, SYS_SLOT_10MS_PERIOD_MS);
+    s_RunSlot(SYS_SLOT_10MS, SYS_SLOT_10MS_PERIOD_TK);
 
     s_StateMachine();
 

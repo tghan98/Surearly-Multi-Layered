@@ -30,6 +30,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "HW_Ret_Code.h"
+#include "HW_Tick_Drive.h"   /* HW_TICK_MS(), HW_TICK_WAIT_MS() */
 
 /* Exported types ------------------------------------------------------------*/
 typedef enum
@@ -49,7 +50,7 @@ typedef struct
 /* Exported constants --------------------------------------------------------*/
 #define HW_UART_BAUD             9600uL
 #define HW_UART_RX_BUF_SIZE      16u    /* power of two, see the .c */
-#define HW_UART_TX_TIMEOUT_MS    5u     /* one byte is ~1.04 ms at 9600 */
+#define HW_UART_TX_TIMEOUT_TK    HW_TICK_WAIT_MS(5u) /* one byte ~1.04 ms at 9600 */
 
 /* API -----------------------------------------------------------------------*/
 /**

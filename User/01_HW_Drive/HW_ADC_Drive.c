@@ -62,7 +62,7 @@ Ret_t HW_ADC_Disable(void)
 
 Ret_t HW_ADC_Read(HW_ADC_Id tId, uint16_t *p_wOut)
 {
-    uint32_t dwStart;
+    uint16_t wStart;
     Ret_t    tRet = RET_TIMEOUT;
 
     if (p_wOut == NULL)
@@ -81,8 +81,8 @@ Ret_t HW_ADC_Read(HW_ADC_Id tId, uint16_t *p_wOut)
     ADC_ChannelCmd(ADC1, s_map[tId], ENABLE);
     ADC_SoftwareStartConv(ADC1);
 
-    dwStart = HW_Tick_Get();
-    while (HW_Tick_Elapsed(dwStart) <= (uint32_t)HW_ADC_CONV_TIMEOUT_MS)
+    wStart = HW_Tick_Get();
+    while (HW_Tick_Elapsed(wStart) <= HW_ADC_CONV_TIMEOUT_TK)
     {
         if (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) != RESET)
         {

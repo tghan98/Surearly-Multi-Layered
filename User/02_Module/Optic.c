@@ -25,7 +25,7 @@ typedef struct
 {
     Optic_State tState;
     Optic_Ch    tCh;                        /* channel being measured     */
-    uint32_t    dwStart;                    /* tick at the step entry     */
+    uint16_t    wStart;                     /* tick at the step entry     */
     uint16_t    awRaw[OPTIC_CH_COUNT];      /* last result per channel    */
     uint16_t    awGain[OPTIC_CH_COUNT];     /* integer percent            */
     Ret_t       tError;                     /* pending, taken by _TakeError */
@@ -71,7 +71,7 @@ static Ret_t s_Burst(Optic_Ch tCh, uint16_t *p_wOut)
     uint16_t awSample[OPTIC_BURST_COUNT];
     uint16_t wDiscard;
     uint16_t wTemp;
-    uint32_t dwSum = 0uL;
+    uint16_t wSum = 0u;
     uint8_t  i;
     uint8_t  j;
 
@@ -106,10 +106,13 @@ static Ret_t s_Burst(Optic_Ch tCh, uint16_t *p_wOut)
     for (i = (uint8_t)OPTIC_TRIM_EACH_SIDE;
          i < (uint8_t)(OPTIC_BURST_COUNT - OPTIC_TRIM_EACH_SIDE); i++)
     {
-        dwSum += (uint32_t)awSample[i];
+        /* 16 samples x 4095 (12-bit ADC full scale) = 65520, inside
+           uint16_t. Keeping the sum 16-bit avoids the 32-bit add/divide
+           library helpers on this 8-bit core. */
+        wSum += awSample[i];
     }
 
-    *p_wOut = (uint16_t)(dwSum / (uint32_t)OPTIC_KEEP_COUNT);
+    *p_wOut = (uint16_t)(wSum / OPTIC_KEEP_COUNT);
 
     return RET_OK;
 }
@@ -152,7 +155,7 @@ Ret_t Optic_Start(Optic_Ch tCh)
     (void)HW_ADC_Enable();
     (void)HW_GPIO_Write(s_ledMap[tCh], OPTIC_LED_ON);
 
-    s_optic.dwStart = HW_Tick_Get();
+    s_optic.wStart = HW_Tick_Get();
     s_optic.tState  = OPTIC_SETTLE;
 
     return RET_OK;
@@ -170,7 +173,7 @@ Ret_t Optic_Process(void)
 
         case OPTIC_SETTLE:
             /* 100 kohm x 22 nF = 2.2 ms, so 20 ms reaches about 99.99 %. */
-            if (HW_Tick_Elapsed(s_optic.dwStart) >= (uint32_t)OPTIC_SETTLE_MS)
+            if (HW_Tick_Elapsed(s_optic.wStart) >= OPTIC_SETTLE_TK)
             {
                 s_optic.tState = OPTIC_SAMPLE;
             }
@@ -194,13 +197,13 @@ Ret_t Optic_Process(void)
                 s_optic.bErrPending = 1u;
             }
 
-            s_optic.dwStart = HW_Tick_Get();
+            s_optic.wStart = HW_Tick_Get();
             s_optic.tState  = OPTIC_RECOVER;
             break;
 
         case OPTIC_RECOVER:
             /* Let the supply recover before the next burst draws 20 mA. */
-            if (HW_Tick_Elapsed(s_optic.dwStart) >= (uint32_t)OPTIC_RECOVER_MS)
+            if (HW_Tick_Elapsed(s_optic.wStart) >= OPTIC_RECOVER_TK)
             {
                 s_optic.tState = OPTIC_IDLE;
             }

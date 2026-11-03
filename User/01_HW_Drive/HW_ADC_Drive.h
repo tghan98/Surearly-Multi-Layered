@@ -34,6 +34,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "HW_Ret_Code.h"
+#include "HW_Tick_Drive.h"   /* HW_TICK_MS(), HW_TICK_WAIT_MS() */
 
 /* Exported types ------------------------------------------------------------*/
 typedef enum
@@ -47,7 +48,7 @@ typedef enum
 /* Exported constants --------------------------------------------------------*/
 /* One conversion takes about 198 us at 384 cycles / 2 MHz. The bound is in
    whole ms because the tick is 1 ms (spec §10: a ms timeout is at least 2). */
-#define HW_ADC_CONV_TIMEOUT_MS   2u
+#define HW_ADC_CONV_TIMEOUT_TK   HW_TICK_WAIT_MS(2u)
 
 /* API -----------------------------------------------------------------------*/
 /**

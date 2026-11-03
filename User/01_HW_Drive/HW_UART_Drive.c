@@ -60,7 +60,7 @@ Ret_t HW_UART_Init(void)
 Ret_t HW_UART_Write(HW_UART_Id tId, const uint8_t *p_bBuf, uint16_t wLen)
 {
     uint16_t wIdx;
-    uint32_t dwStart;
+    uint16_t wStart;
 
     if (p_bBuf == NULL)
     {
@@ -73,10 +73,10 @@ Ret_t HW_UART_Write(HW_UART_Id tId, const uint8_t *p_bBuf, uint16_t wLen)
 
     for (wIdx = 0u; wIdx < wLen; wIdx++)
     {
-        dwStart = HW_Tick_Get();
+        wStart = HW_Tick_Get();
         while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET)
         {
-            if (HW_Tick_Elapsed(dwStart) > (uint32_t)HW_UART_TX_TIMEOUT_MS)
+            if (HW_Tick_Elapsed(wStart) > HW_UART_TX_TIMEOUT_TK)
             {
                 if (s_stat.wTxTimeout < 0xFFFFu)
                 {
@@ -91,10 +91,10 @@ Ret_t HW_UART_Write(HW_UART_Id tId, const uint8_t *p_bBuf, uint16_t wLen)
 
     /* Let the last byte leave the shift register before returning, so a
        caller may power the port down straight away. */
-    dwStart = HW_Tick_Get();
+    wStart = HW_Tick_Get();
     while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
     {
-        if (HW_Tick_Elapsed(dwStart) > (uint32_t)HW_UART_TX_TIMEOUT_MS)
+        if (HW_Tick_Elapsed(wStart) > HW_UART_TX_TIMEOUT_TK)
         {
             if (s_stat.wTxTimeout < 0xFFFFu)
             {

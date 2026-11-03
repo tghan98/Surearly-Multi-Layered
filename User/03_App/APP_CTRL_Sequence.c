@@ -30,7 +30,7 @@
 #define SEQ_INSERT_COUNT_CAP   254u
 
 /* One tick of settling after the clock comes back, as the old FW did. */
-#define SEQ_RESUME_SETTLE_MS     10u
+#define SEQ_RESUME_SETTLE_TK     HW_TICK_WAIT_MS(10u)
 
 /* Private types -------------------------------------------------------------*/
 typedef enum
@@ -58,7 +58,7 @@ typedef struct
 {
     APP_CTRL_Sequence_Step tStep;
     Seq_Phase              tPhase;
-    uint32_t               dwStart;      /* step or phase entry tick       */
+    uint16_t               wStart;       /* step or phase entry tick       */
     APP_DATA_ErrorCode     tError;
     uint8_t                bErrorStep;   /* step the error happened in     */
     uint8_t                bQcCycle;
@@ -68,8 +68,8 @@ typedef struct
     uint16_t               awResultBand[OPTIC_CH_COUNT];
     uint16_t               awResult[SEQ_RES_COUNT];
     uint16_t               wThreshold;
-    uint32_t               dwSleepStart;
-    uint32_t               dwStickStart;
+    uint16_t               wSleepStart;
+    uint16_t               wStickStart;
     uint8_t                bChecking;
     uint8_t                bChannel;
     uint8_t                bSleeps;
@@ -106,10 +106,10 @@ static void s_GoStep(APP_CTRL_Sequence_Step tStep)
 {
     s_seq.tStep   = tStep;
     s_seq.tPhase  = SEQ_PH_ENTER;
-    s_seq.dwStart = HW_Tick_Get();
+    s_seq.wStart = HW_Tick_Get();
 }
 
-/* Show the error and hold it for APP_ERR_RUN_TIME_MS. */
+/* Show the error and hold it for APP_ERR_RUN_TIME_TK. */
 static void s_EnterError(APP_DATA_ErrorCode tCode, Lcd_Icon tIcon)
 {
     s_seq.tError     = tCode;
@@ -188,14 +188,14 @@ static void s_StepIdle(void)
             (void)Lcd_Init();
             (void)PcComm_Init();
 
-            s_seq.dwStart = HW_Tick_Get();
+            s_seq.wStart = HW_Tick_Get();
             s_seq.tPhase  = SEQ_PH_SETTLE;
             break;
 
         case SEQ_PH_SETTLE:
             /* Let the clock and the ADC settle before the gate measurement,
                as the old FW did with one sleep tick after Power_Resume(). */
-            if (HW_Tick_Elapsed(s_seq.dwStart) >= (uint32_t)SEQ_RESUME_SETTLE_MS)
+            if (HW_Tick_Elapsed(s_seq.wStart) >= SEQ_RESUME_SETTLE_TK)
             {
                 s_ClearRun();
                 (void)APP_EXEC_Measure_StartStickCheck(0u);  /* raw axis */
@@ -354,22 +354,22 @@ static uint8_t s_SleepAndCheckStick(APP_DATA_ErrorCode tError)
     }
     else
     {
-        if (HW_Tick_Elapsed(s_seq.dwSleepStart)
-            < (uint32_t)APP_STICK_CHECK_INTENDED_MS)
+        if (HW_Tick_Elapsed(s_seq.wSleepStart)
+            < APP_STICK_CHECK_INTENDED_TK)
         {
             return 0u;
         }
-        if (HW_Tick_Elapsed(s_seq.dwStickStart) >= APP_STICK_CHECK_INTERVAL_MS)
+        if (HW_Tick_Elapsed(s_seq.wStickStart) >= APP_STICK_CHECK_INTERVAL_TK)
         {
             if (APP_EXEC_Measure_StartStickCheck(1u) == RET_OK)
             {
-                s_seq.dwStickStart = HW_Tick_Get();
+                s_seq.wStickStart = HW_Tick_Get();
                 s_seq.bChecking = 1u;
             }
             return 0u;
         }
     }
-    s_seq.dwSleepStart = HW_Tick_Get();
+    s_seq.wSleepStart = HW_Tick_Get();
     return 1u;
 }
 
@@ -416,10 +416,10 @@ static void s_StepSampleLoadWait(void)
             s_seq.wThreshold = s_Ratio(APP_EXEC_Measure_Intensity(
                 s_seq.awEmptyBand[OPTIC_CH_T], s_seq.awEmptyBand[OPTIC_CH_BT]),
                 APP_EMPTY_BTB_RATIO);
-            s_seq.dwStart = HW_Tick_Get();
-            s_seq.dwSleepStart = s_seq.dwStart;
+            s_seq.wStart = HW_Tick_Get();
+            s_seq.wSleepStart = s_seq.wStart;
             /* The old cached-status reset forces the first recheck. */
-            s_seq.dwStickStart = s_seq.dwStart - APP_STICK_CHECK_INTERVAL_MS;
+            s_seq.wStickStart = (uint16_t)(s_seq.wStart - APP_STICK_CHECK_INTERVAL_TK);
             s_seq.bChecking = 0u;
             s_seq.bSleeps = 0u;
             s_seq.tPhase = SEQ_PH_WAIT;
@@ -437,7 +437,7 @@ static void s_StepSampleLoadWait(void)
                 break;
             }
             s_seq.bSleeps = 0u;
-            if (HW_Tick_Elapsed(s_seq.dwStart) >= APP_SAMPLE_LOAD_WAIT_MS)
+            if (HW_Tick_Elapsed(s_seq.wStart) >= APP_SAMPLE_LOAD_WAIT_TK)
             {
                 s_seq.awResultBand[OPTIC_CH_T] = s_seq.awScaled[OPTIC_CH_T];
                 s_seq.awResultBand[OPTIC_CH_BT] = s_seq.awScaled[OPTIC_CH_BT];
@@ -470,7 +470,7 @@ static void s_StepSampleLoadWait(void)
                 if (APP_EXEC_Measure_Intensity(s_seq.awScaled[OPTIC_CH_T],
                     s_seq.awScaled[OPTIC_CH_BT]) >= s_seq.wThreshold)
                 {
-                    s_seq.dwSleepStart = HW_Tick_Get();
+                    s_seq.wSleepStart = HW_Tick_Get();
                     s_seq.tPhase = SEQ_PH_WAIT;
                     break;
                 }
@@ -514,7 +514,7 @@ static void s_StepSampleLoadWait(void)
 }
 
 /* Shared wait/one-C-channel shape for the two volume checks. */
-static void s_SampleCheck(uint32_t dwWait, uint16_t wBase, uint16_t wRatio,
+static void s_SampleCheck(uint16_t wWait, uint16_t wBase, uint16_t wRatio,
                           APP_CTRL_Sequence_Step tNext, APP_DATA_ErrorCode tError)
 {
     uint16_t wC;
@@ -524,14 +524,14 @@ static void s_SampleCheck(uint32_t dwWait, uint16_t wBase, uint16_t wRatio,
     {
         case SEQ_PH_ENTER:
             s_seq.wThreshold = s_Ratio(wBase, wRatio);
-            s_seq.dwStart = HW_Tick_Get();
-            s_seq.dwSleepStart = s_seq.dwStart;
+            s_seq.wStart = HW_Tick_Get();
+            s_seq.wSleepStart = s_seq.wStart;
             s_seq.tPhase = SEQ_PH_WAIT;
             break;
 
         case SEQ_PH_WAIT:
             if ((s_SleepAndCheckStick(APP_ERR_STICK_FAIL) != 0u)
-                && (HW_Tick_Elapsed(s_seq.dwStart) >= dwWait))
+                && (HW_Tick_Elapsed(s_seq.wStart) >= wWait))
             {
                 s_seq.tPhase = SEQ_PH_START_CHANNEL;
             }
@@ -571,7 +571,7 @@ static void s_SampleCheck(uint32_t dwWait, uint16_t wBase, uint16_t wRatio,
 /* ---- Steps 4 and 5: OVER_SAMPLE_CHECK, LOW_SAMPLE_CHECK -------------------*/
 static void s_StepOverSampleCheck(void)
 {
-    s_SampleCheck(APP_OVER_SAMPLE_CHECK_MS, s_seq.awResultBand[OPTIC_CH_C],
+    s_SampleCheck(APP_OVER_SAMPLE_CHECK_TK, s_seq.awResultBand[OPTIC_CH_C],
                   APP_OVER_FLOW_RATIO, APP_SEQ_LOW_SAMPLE_CHECK, APP_ERR_OVER_FLOW);
     if (s_seq.tStep == APP_SEQ_LOW_SAMPLE_CHECK)
     {
@@ -582,7 +582,7 @@ static void s_StepOverSampleCheck(void)
 
 static void s_StepLowSampleCheck(void)
 {
-    s_SampleCheck(APP_LOW_SAMPLE_CHECK_MS, s_seq.awEmptyBand[OPTIC_CH_C],
+    s_SampleCheck(APP_LOW_SAMPLE_CHECK_TK, s_seq.awEmptyBand[OPTIC_CH_C],
                   APP_SMALL_SAMPLE_RATIO, APP_SEQ_REACTION_WAIT, APP_ERR_LOW_SAMPLE);
 }
 
@@ -591,12 +591,12 @@ static void s_StepReactionWait(void)
 {
     if (s_seq.tPhase == SEQ_PH_ENTER)
     {
-        s_seq.dwStart = HW_Tick_Get();
-        s_seq.dwSleepStart = s_seq.dwStart;
+        s_seq.wStart = HW_Tick_Get();
+        s_seq.wSleepStart = s_seq.wStart;
         s_seq.tPhase = SEQ_PH_WAIT;
     }
     else if ((s_SleepAndCheckStick(APP_ERR_STICK_FAIL) != 0u)
-             && (HW_Tick_Elapsed(s_seq.dwStart) >= APP_REACTION_WAIT_MS))
+             && (HW_Tick_Elapsed(s_seq.wStart) >= APP_REACTION_WAIT_TK))
     {
         s_GoStep(APP_SEQ_RESULT_SCAN);
     }
@@ -678,11 +678,11 @@ static void s_StepResultOut(void)
     {
         if (s_SaveResult() == RET_OK)
         {
-            s_seq.dwStart = HW_Tick_Get();
+            s_seq.wStart = HW_Tick_Get();
             s_seq.tPhase = SEQ_PH_WAIT;
         }
     }
-    else if (HW_Tick_Elapsed(s_seq.dwStart) >= APP_RESULT_OUT_WAIT_MS)
+    else if (HW_Tick_Elapsed(s_seq.wStart) >= APP_RESULT_OUT_WAIT_TK)
     {
         s_GoStep(APP_SEQ_IDLE);
     }
@@ -702,10 +702,10 @@ static void s_StepErrorWait(void)
                 return;
             }
         }
-        s_seq.dwStart = HW_Tick_Get();
+        s_seq.wStart = HW_Tick_Get();
         s_seq.tPhase = SEQ_PH_WAIT;
     }
-    else if (HW_Tick_Elapsed(s_seq.dwStart) >= APP_ERR_RUN_TIME_MS)
+    else if (HW_Tick_Elapsed(s_seq.wStart) >= APP_ERR_RUN_TIME_TK)
     {
         s_GoStep(APP_SEQ_IDLE);
     }
@@ -716,7 +716,7 @@ Ret_t APP_CTRL_Sequence_Init(void)
 {
     s_seq.tStep      = APP_SEQ_IDLE;
     s_seq.tPhase     = SEQ_PH_ENTER;
-    s_seq.dwStart    = HW_Tick_Get();
+    s_seq.wStart    = HW_Tick_Get();
     s_seq.tError     = APP_ERR_NONE;
     s_seq.bErrorStep = 0u;
     s_seq.bQcCycle   = 0u;

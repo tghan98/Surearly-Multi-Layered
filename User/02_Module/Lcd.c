@@ -16,8 +16,8 @@ typedef struct
     Lcd_State atIcon[LCD_ICON_COUNT];
     uint8_t   bComPhase;      /* 0 or 1, flipped every refresh      */
     uint8_t   bBlinkOn;       /* current half of the blink period   */
-    uint32_t  dwBlinkStart;
-    uint32_t  dwRefreshLast;
+    uint16_t  wBlinkStart;
+    uint16_t  wRefreshLast;
 } Lcd_Ctx;
 
 /* Private variables ---------------------------------------------------------*/
@@ -44,8 +44,8 @@ Ret_t Lcd_Init(void)
 
     s_lcd.bComPhase     = 0u;
     s_lcd.bBlinkOn      = 0u;
-    s_lcd.dwBlinkStart  = HW_Tick_Get();
-    s_lcd.dwRefreshLast = s_lcd.dwBlinkStart;
+    s_lcd.wBlinkStart  = HW_Tick_Get();
+    s_lcd.wRefreshLast = s_lcd.wBlinkStart;
 
     (void)HW_GPIO_Write(HW_GPIO_LCD_COM, HW_GPIO_LEVEL_LOW);
     for (bIcon = 0u; bIcon < (uint8_t)LCD_ICON_COUNT; bIcon++)
@@ -62,11 +62,11 @@ Ret_t Lcd_Process(void)
     uint8_t bOn;
     uint8_t bSegLevel;
 
-    if (HW_Tick_Elapsed(s_lcd.dwRefreshLast) < (uint32_t)LCD_REFRESH_MS)
+    if (HW_Tick_Elapsed(s_lcd.wRefreshLast) < LCD_REFRESH_TK)
     {
         return RET_OK;
     }
-    s_lcd.dwRefreshLast = HW_Tick_Get();
+    s_lcd.wRefreshLast = HW_Tick_Get();
 
     /* 1. Flip COM. The panel sees AC only because this keeps happening. */
     s_lcd.bComPhase = (s_lcd.bComPhase == 0u) ? 1u : 0u;
@@ -75,9 +75,9 @@ Ret_t Lcd_Process(void)
                                                 : HW_GPIO_LEVEL_HIGH);
 
     /* 2. Advance the blink half-period. */
-    if (HW_Tick_Elapsed(s_lcd.dwBlinkStart) >= (uint32_t)LCD_BLINK_HALF_MS)
+    if (HW_Tick_Elapsed(s_lcd.wBlinkStart) >= LCD_BLINK_HALF_TK)
     {
-        s_lcd.dwBlinkStart = HW_Tick_Get();
+        s_lcd.wBlinkStart = HW_Tick_Get();
         s_lcd.bBlinkOn     = (s_lcd.bBlinkOn == 0u) ? 1u : 0u;
     }
 

@@ -7,9 +7,11 @@
   * (spec v2.0.3 §8). Values are carried over from the old FW unchanged; the
   * old name is noted beside each one so the two can be compared.
   *
-  * TIME VALUES ARE IN MILLISECONDS. The old FW counted 10 ms ticks, so every
-  * old number is multiplied by 10 here. Several no longer fit in 16 bits and
-  * are declared uL.
+  * TIME VALUES ARE WRITTEN IN MILLISECONDS and converted to ticks at compile
+  * time by HW_TICK_MS(). One tick is 10 ms, the same unit the old FW counted,
+  * so every constant below ends up as the old number again - but the source
+  * still reads in milliseconds, which is the unit the spec is written in.
+  * Nothing wider than 16 bits reaches the generated code.
   *
   * @par Upper App
   * - none (data layer, called from every layer above)
@@ -17,6 +19,9 @@
   */
 #ifndef __APP_DATA_CONFIG_H__
 #define __APP_DATA_CONFIG_H__
+
+/* Includes ------------------------------------------------------------------*/
+#include "HW_Tick_Drive.h"      /* HW_TICK_MS() */
 
 /* Includes ------------------------------------------------------------------*/
 #include "HW_Ret_Code.h"
@@ -58,19 +63,18 @@
 /* Usage limit ---------------------------------------------------------------*/
 #define APP_SCAN_MAX_COUNT                 30u   /* old _nSCAN_MAX_CNT         */
 
-/* Sequence timing (milliseconds) --------------------------------------------*/
-/* old values were in 10 ms ticks; each is x10 here. */
-#define APP_ERR_RUN_TIME_MS            120000uL  /* old ERR_RUN_TIME        12000  */
-#define APP_SAMPLE_LOAD_WAIT_MS        300000uL  /* old SAMPLE_LOAD_WAIT_TIME 30000 */
-#define APP_OVER_SAMPLE_CHECK_MS         5000uL  /* old OVER_SAMPLE_CHECK_TIME  500 */
-#define APP_LOW_SAMPLE_CHECK_MS         20000uL  /* old LOW_SAMPLE_CHECK_TIME  2000 */
-#define APP_TOTAL_REACTION_MS          180000uL  /* old TOTAL_REACTION_TIME   18000 */
-#define APP_RESULT_OUT_WAIT_MS         300000uL  /* old RESULT_OUT_WAIT_TIME  30000 */
+/* Sequence timing (ticks, written as milliseconds) ---------------------------*/
+#define APP_ERR_RUN_TIME_TK        HW_TICK_MS(120000uL) /* old ERR_RUN_TIME        12000 */
+#define APP_SAMPLE_LOAD_WAIT_TK    HW_TICK_MS(300000uL) /* old SAMPLE_LOAD_WAIT_TIME 30000 */
+#define APP_OVER_SAMPLE_CHECK_TK   HW_TICK_MS(  5000uL) /* old OVER_SAMPLE_CHECK_TIME  500 */
+#define APP_LOW_SAMPLE_CHECK_TK    HW_TICK_MS( 20000uL) /* old LOW_SAMPLE_CHECK_TIME  2000 */
+#define APP_TOTAL_REACTION_TK      HW_TICK_MS(180000uL) /* old TOTAL_REACTION_TIME   18000 */
+#define APP_RESULT_OUT_WAIT_TK     HW_TICK_MS(300000uL) /* old RESULT_OUT_WAIT_TIME  30000 */
 
 /* Remainder of the reaction window after the two sample checks. */
-#define APP_REACTION_WAIT_MS     (APP_TOTAL_REACTION_MS \
-                                  - APP_OVER_SAMPLE_CHECK_MS \
-                                  - APP_LOW_SAMPLE_CHECK_MS)
+#define APP_REACTION_WAIT_TK     ((uint16_t)(APP_TOTAL_REACTION_TK \
+                                             - APP_OVER_SAMPLE_CHECK_TK \
+                                             - APP_LOW_SAMPLE_CHECK_TK))
 
 /* How often the stick is re-checked while waiting.
    The old FW declared OPTIC_STICK_CHECK_INTERVAL_MS as 250, but the counter
@@ -85,8 +89,8 @@
 
    Fix it after the port is confirmed against the old readings, as its own
    change with its own test. (decided 2026-11-03) */
-#define APP_STICK_CHECK_INTERVAL_MS      6250uL  /* shipped behaviour       */
-#define APP_STICK_CHECK_INTENDED_MS       250u   /* declared intent, unused */
+#define APP_STICK_CHECK_INTERVAL_TK  HW_TICK_MS(6250uL) /* shipped behaviour       */
+#define APP_STICK_CHECK_INTENDED_TK  HW_TICK_MS( 250u)  /* declared intent, unused */
 
 #endif /* __APP_DATA_CONFIG_H__ */
 /*****************************END OF FILE****/

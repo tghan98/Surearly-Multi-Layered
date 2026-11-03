@@ -36,6 +36,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "HW_Ret_Code.h"
+#include "HW_Tick_Drive.h"   /* HW_TICK_MS(), HW_TICK_WAIT_MS() */
 
 /* Exported types ------------------------------------------------------------*/
 typedef enum
@@ -57,8 +58,8 @@ typedef enum
 } Optic_State;
 
 /* Exported constants --------------------------------------------------------*/
-#define OPTIC_SETTLE_MS          20u
-#define OPTIC_RECOVER_MS         10u
+#define OPTIC_SETTLE_TK          HW_TICK_WAIT_MS(20u)
+#define OPTIC_RECOVER_TK         HW_TICK_WAIT_MS(10u)
 #define OPTIC_SAMPLE_COUNT       20u   /* kept, after one discarded */
 #define OPTIC_TRIM_EACH_SIDE     2u    /* mean of the middle 16 */
 #define OPTIC_GAIN_SCALE         100u  /* gain is an integer percent */

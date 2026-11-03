@@ -33,6 +33,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "HW_Ret_Code.h"
+#include "HW_Tick_Drive.h"   /* HW_TICK_MS() */
 
 /* Exported types ------------------------------------------------------------*/
 /* Scheduler state. Device state (idle, measuring, error) belongs to the App. */
@@ -46,8 +47,7 @@ typedef enum
 
 typedef enum
 {
-    SYS_SLOT_1MS = 0,
-    SYS_SLOT_10MS,
+    SYS_SLOT_10MS = 0,
     SYS_SLOT_COUNT
 } System_Slot;
 
@@ -70,8 +70,11 @@ typedef struct
 #define SYS_INIT_ERR_PCCOMM      0x40u
 #define SYS_INIT_ERR_RECORD      0x80u
 
-#define SYS_SLOT_1MS_PERIOD_MS   1u
-#define SYS_SLOT_10MS_PERIOD_MS  10u
+/* One tick is 10 ms, so this is the fastest slot the time base can express.
+   The 1 ms slot this file used to declare was empty: nothing in this product
+   needs finer than 10 ms, and an empty slot still costs a due-check every
+   pass. Removed with the move to a 10 ms time base. (decided 2026-11-03) */
+#define SYS_SLOT_10MS_PERIOD_TK  HW_TICK_MS(10u)
 
 /* API -----------------------------------------------------------------------*/
 /**
