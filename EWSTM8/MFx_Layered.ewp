@@ -1734,9 +1734,27 @@
             </group>
             <group>
                 <name>2_Exec</name>
+                <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_EXEC_Measure.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_EXEC_Measure.h</name>
+                </file>
             </group>
             <group>
                 <name>3_Data</name>
+                <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_DATA_Record.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_DATA_Config.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_DATA_ErrorCode.h</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_DATA_Record.h</name>
+                </file>
             </group>
         </group>
     </group>

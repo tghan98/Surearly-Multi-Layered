@@ -68,6 +68,7 @@ typedef struct
 #define SYS_INIT_ERR_LCD         0x10u
 #define SYS_INIT_ERR_EEPROM      0x20u
 #define SYS_INIT_ERR_PCCOMM      0x40u
+#define SYS_INIT_ERR_RECORD      0x80u
 
 #define SYS_SLOT_1MS_PERIOD_MS   1u
 #define SYS_SLOT_10MS_PERIOD_MS  10u

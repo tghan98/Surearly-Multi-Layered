@@ -16,6 +16,8 @@
 #include "Eeprom.h"
 #include "Lcd.h"
 #include "PcComm.h"
+#include "APP_DATA_Record.h"
+#include "APP_EXEC_Measure.h"
 #include "Optic.h"
 #include "stm8l15x.h"
 #include "stm8l15x_rst.h"
@@ -125,6 +127,10 @@ static void s_Slot10ms(void)
     (void)Lcd_Process();
     (void)Eeprom_Process();
     (void)PcComm_Process();
+
+    /* App: data first, it is the layer the others read from. */
+    (void)APP_DATA_Record_Process();
+    (void)APP_EXEC_Measure_Process();
 }
 
 static void s_StateMachine(void)
@@ -216,6 +222,15 @@ Ret_t System_Main_Init(void)
     {
         s_sys.bInitErr |= SYS_INIT_ERR_PCCOMM;
     }
+
+    /* 4. App: stored data first, then the command gate, then control. */
+    tRet = APP_DATA_Record_Init();
+    if (tRet != RET_OK)
+    {
+        s_sys.bInitErr |= SYS_INIT_ERR_RECORD;
+    }
+
+    (void)APP_EXEC_Measure_Init();
 
 #if (SYS_USE_BLINK_TEST == 1)
     /* TEMPORARY: see the build switch block above. */
