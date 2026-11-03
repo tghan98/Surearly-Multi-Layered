@@ -152,5 +152,15 @@ uint16_t APP_EXEC_Measure_GetStickValue(void);
   */
 const uint16_t *APP_EXEC_Measure_GetInitial(void);
 
+/**
+  * @brief  Calculates the legacy four-digit intensity ratio.
+  * @param  wDividend : numerator
+  * @param  wDivisor : denominator
+  * @note   Layer: App (exec). Blocking: no. ISR: no.
+  *         Preserves the legacy 16-bit intermediate arithmetic.
+  * @retval Ratio, or zero if either operand is zero
+  */
+uint16_t APP_EXEC_Measure_Intensity(uint16_t wDividend, uint16_t wDivisor);
+
 #endif /* __APP_EXEC_MEASURE_H__ */
 /*****************************END OF FILE****/

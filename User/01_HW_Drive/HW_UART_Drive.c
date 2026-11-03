@@ -20,7 +20,11 @@
 #define HW_UART_RX_MASK          (HW_UART_RX_BUF_SIZE - 1u)
 
 /* Private variables ---------------------------------------------------------*/
-static volatile uint8_t  s_abRx[HW_UART_RX_BUF_SIZE];
+/* __near: this buffer lives in RAM above page zero. Page zero is only
+   256 bytes and every variable defaults there in the small data model;
+   the bulk buffers are moved out so the frequently touched state can
+   stay in the short-addressed page. See EWSTM8/MFx_Layered.icf. */
+__near static volatile uint8_t s_abRx[HW_UART_RX_BUF_SIZE];
 static volatile uint8_t  s_bRxHead = 0u;   /* written by the ISR  */
 static volatile uint8_t  s_bRxTail = 0u;   /* written by the main loop */
 static HW_UART_Stat      s_stat;
@@ -41,8 +45,13 @@ Ret_t HW_UART_Init(void)
     s_bRxHead = 0u;
     s_bRxTail = 0u;
 
-    /* Buffer is ready before the interrupt can fire (spec v2.0.3 §10). */
-    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+    /* Buffer is ready before the interrupt can fire (spec v2.0.3 §10).
+       The receive interrupt is enabled by writing the bit, not through
+       USART_ITConfig(): that routine decodes every interrupt source and
+       costs 102 bytes of flash for this one bit. A driver is the layer
+       where touching a register is allowed (spec §3). */
+    USART1->CR2 |= (uint8_t)USART_CR2_RIEN;
+
     USART_Cmd(USART1, ENABLE);
 
     return RET_OK;
@@ -167,7 +176,10 @@ void HW_UART_Isr(void)
     uint8_t bData;
     uint8_t bNext;
 
-    if (USART_GetITStatus(USART1, USART_IT_RXNE) == RESET)
+    /* Read the flag directly. USART_GetITStatus() decodes every interrupt
+       source and costs 96 bytes, and this runs on every received byte, so
+       the shorter path also means less time awake (spec §12). */
+    if ((USART1->SR & (uint8_t)USART_SR_RXNE) == 0u)
     {
         return;
     }

@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='UTF-8'?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project>
     <fileVersion>3</fileVersion>
     <configuration>
@@ -151,7 +151,7 @@
                 <option>
                     <name>IccOptStrategy</name>
                     <version>0</version>
-                    <state>0</state>
+                    <state>1</state>
                 </option>
                 <option>
                     <name>IccOptLevelSlave</name>
@@ -160,7 +160,7 @@
                 <option>
                     <name>IccOptAllowList</name>
                     <version>0</version>
-                    <state>111111</state>
+                    <state>100011</state>
                 </option>
                 <option>
                     <name>IccGenerateDebugInfo</name>
@@ -229,19 +229,19 @@
                 </option>
                 <option>
                     <name>CCDiagSuppress</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCDiagRemark</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCDiagWarning</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCDiagError</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCDiagWarnAreErr</name>
@@ -253,7 +253,7 @@
                 </option>
                 <option>
                     <name>PreInclude</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCIncludePath2</name>
@@ -288,7 +288,7 @@
                 </option>
                 <option>
                     <name>IccExtraOptions</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IccLang</name>
@@ -395,11 +395,11 @@
                 </option>
                 <option>
                     <name>AsmIncludePath</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDefines</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmPreprocOutput</name>
@@ -419,19 +419,19 @@
                 </option>
                 <option>
                     <name>AsmDiagnosticsSuppress</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDiagnosticsRemark</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDiagnosticsWarning</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDiagnosticsError</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDiagnosticsWarningsAreErrors</name>
@@ -467,11 +467,11 @@
                 </option>
                 <option>
                     <name>AsmExtraOptions</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmPreInclude</name>
-                    <state />
+                    <state></state>
                 </option>
             </data>
         </settings>
@@ -509,8 +509,8 @@
             <name>CUSTOM</name>
             <archiveVersion>3</archiveVersion>
             <data>
-                <extensions />
-                <cmdline />
+                <extensions></extensions>
+                <cmdline></cmdline>
                 <hasPrio>0</hasPrio>
             </data>
         </settings>
@@ -523,8 +523,8 @@
             <name>BUILDACTION</name>
             <archiveVersion>1</archiveVersion>
             <data>
-                <prebuild />
-                <postbuild />
+                <prebuild></prebuild>
+                <postbuild></postbuild>
             </data>
         </settings>
         <settings>
@@ -556,31 +556,31 @@
                 </option>
                 <option>
                     <name>IlinkKeepSymbols</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkRawBinaryFile</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkRawBinarySymbol</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkRawBinarySegment</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkRawBinaryAlign</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkDefines</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkConfigDefines</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkMapFile</name>
@@ -608,15 +608,15 @@
                 </option>
                 <option>
                     <name>IlinkIcfOverride</name>
-                    <state>0</state>
+                    <state>1</state>
                 </option>
                 <option>
                     <name>IlinkIcfFile</name>
-                    <state>$TOOLKIT_DIR$\config\lnkstm8l151f3.icf</state>
+                    <state>$PROJ_DIR$\MFx_Layered.icf</state>
                 </option>
                 <option>
                     <name>IlinkIcfFileSlave</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkEnableRemarks</name>
@@ -624,19 +624,19 @@
                 </option>
                 <option>
                     <name>IlinkSuppressDiags</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkTreatAsRem</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkTreatAsWarn</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkTreatAsErr</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkWarningsAreErrors</name>
@@ -656,7 +656,7 @@
                 </option>
                 <option>
                     <name>IlinkExtraOptions</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkAutoLibEnable</name>
@@ -664,7 +664,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -773,7 +773,7 @@
                 </option>
                 <option>
                     <name>IlinkIcfFile_AltDefault</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkLogCallGraph</name>
@@ -790,7 +790,7 @@
                 <debug>1</debug>
                 <option>
                     <name>IarchiveInputs</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IarchiveOverride</name>
@@ -823,7 +823,7 @@
                 <debug>0</debug>
                 <option>
                     <name>GenDeviceSelectMenu</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>GenCodeModel</name>
@@ -863,11 +863,11 @@
                 </option>
                 <option>
                     <name>GenRTDescription</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>GenRTConfigPath</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>GenLibInFormatter</name>
@@ -876,7 +876,7 @@
                 </option>
                 <option>
                     <name>GenLibInFormatterDescription</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>GenLibOutFormatter</name>
@@ -885,7 +885,7 @@
                 </option>
                 <option>
                     <name>GenLibOutFormatterDescription</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>GenStackSize</name>
@@ -924,7 +924,7 @@
                 </option>
                 <option>
                     <name>GenMathFunctionDescription</name>
-                    <state />
+                    <state></state>
                 </option>
             </data>
         </settings>
@@ -975,7 +975,7 @@
                 </option>
                 <option>
                     <name>IccOutputFile</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IccCodeModel</name>
@@ -1035,19 +1035,19 @@
                 </option>
                 <option>
                     <name>CCDiagSuppress</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCDiagRemark</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCDiagWarning</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCDiagError</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCDiagWarnAreErr</name>
@@ -1059,7 +1059,7 @@
                 </option>
                 <option>
                     <name>PreInclude</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>CCIncludePath2</name>
@@ -1094,7 +1094,7 @@
                 </option>
                 <option>
                     <name>IccExtraOptions</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IccLang</name>
@@ -1201,11 +1201,11 @@
                 </option>
                 <option>
                     <name>AsmIncludePath</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDefines</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmPreprocOutput</name>
@@ -1225,19 +1225,19 @@
                 </option>
                 <option>
                     <name>AsmDiagnosticsSuppress</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDiagnosticsRemark</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDiagnosticsWarning</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDiagnosticsError</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmDiagnosticsWarningsAreErrors</name>
@@ -1273,11 +1273,11 @@
                 </option>
                 <option>
                     <name>AsmExtraOptions</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>AsmPreInclude</name>
-                    <state />
+                    <state></state>
                 </option>
             </data>
         </settings>
@@ -1299,7 +1299,7 @@
                 </option>
                 <option>
                     <name>OOCOutputFile</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>OOCCommandLineProducer</name>
@@ -1315,8 +1315,8 @@
             <name>CUSTOM</name>
             <archiveVersion>3</archiveVersion>
             <data>
-                <extensions />
-                <cmdline />
+                <extensions></extensions>
+                <cmdline></cmdline>
                 <hasPrio>0</hasPrio>
             </data>
         </settings>
@@ -1329,8 +1329,8 @@
             <name>BUILDACTION</name>
             <archiveVersion>1</archiveVersion>
             <data>
-                <prebuild />
-                <postbuild />
+                <prebuild></prebuild>
+                <postbuild></postbuild>
             </data>
         </settings>
         <settings>
@@ -1362,31 +1362,31 @@
                 </option>
                 <option>
                     <name>IlinkKeepSymbols</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkRawBinaryFile</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkRawBinarySymbol</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkRawBinarySegment</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkRawBinaryAlign</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkDefines</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkConfigDefines</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkMapFile</name>
@@ -1414,15 +1414,15 @@
                 </option>
                 <option>
                     <name>IlinkIcfOverride</name>
-                    <state>0</state>
+                    <state>1</state>
                 </option>
                 <option>
                     <name>IlinkIcfFile</name>
-                    <state>lnk0t.icf</state>
+                    <state>$PROJ_DIR$\MFx_Layered.icf</state>
                 </option>
                 <option>
                     <name>IlinkIcfFileSlave</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkEnableRemarks</name>
@@ -1430,19 +1430,19 @@
                 </option>
                 <option>
                     <name>IlinkSuppressDiags</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkTreatAsRem</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkTreatAsWarn</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkTreatAsErr</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkWarningsAreErrors</name>
@@ -1462,7 +1462,7 @@
                 </option>
                 <option>
                     <name>IlinkExtraOptions</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkAutoLibEnable</name>
@@ -1470,7 +1470,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -1482,7 +1482,7 @@
                 </option>
                 <option>
                     <name>IlinkProgramEntryLabel</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>DoFill</name>
@@ -1579,7 +1579,7 @@
                 </option>
                 <option>
                     <name>IlinkIcfFile_AltDefault</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkLogCallGraph</name>
@@ -1596,7 +1596,7 @@
                 <debug>0</debug>
                 <option>
                     <name>IarchiveInputs</name>
-                    <state />
+                    <state></state>
                 </option>
                 <option>
                     <name>IarchiveOverride</name>
@@ -1614,15 +1614,9 @@
             <data />
         </settings>
     </configuration>
-    <group>
-        <name>Src</name>
-        <file>
-            <name>$PROJ_DIR$\..\Src\main.c</name>
-        </file>
-        <file>
-            <name>$PROJ_DIR$\..\Src\stm8l15x_it.c</name>
-        </file>
-    </group>
+    <mfc>
+        <configuration>Debug</configuration>
+    </mfc>
     <group>
         <name>Drivers</name>
         <file>
@@ -1684,44 +1678,50 @@
         </file>
     </group>
     <group>
-        <name>User</name>
+        <name>Src</name>
         <file>
-            <name>$PROJ_DIR$\..\User\System_Main.c</name>
+            <name>$PROJ_DIR$\..\Src\main.c</name>
         </file>
+        <file>
+            <name>$PROJ_DIR$\..\Src\stm8l15x_it.c</name>
+        </file>
+    </group>
+    <group>
+        <name>User</name>
         <group>
             <name>01_HW_Drive</name>
             <file>
-                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_Tick_Drive.c</name>
+                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_ADC_Drive.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_CLK_Drive.c</name>
             </file>
             <file>
-                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_GPIO_Drive.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_ADC_Drive.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_UART_Drive.c</name>
-            </file>
-            <file>
                 <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_EEPROM_Drive.c</name>
             </file>
             <file>
+                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_GPIO_Drive.c</name>
+            </file>
+            <file>
                 <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_PWR_Drive.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_Tick_Drive.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_UART_Drive.c</name>
             </file>
         </group>
         <group>
             <name>02_Module</name>
             <file>
-                <name>$PROJ_DIR$\..\User\02_Module\Optic.c</name>
+                <name>$PROJ_DIR$\..\User\02_Module\Eeprom.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\User\02_Module\Lcd.c</name>
             </file>
             <file>
-                <name>$PROJ_DIR$\..\User\02_Module\Eeprom.c</name>
+                <name>$PROJ_DIR$\..\User\02_Module\Optic.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\User\02_Module\PcComm.c</name>
@@ -1731,6 +1731,12 @@
             <name>03_App</name>
             <group>
                 <name>1_Ctrl</name>
+                <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_CTRL_Sequence.c</name>
+                </file>
+                <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_CTRL_Sequence.h</name>
+                </file>
             </group>
             <group>
                 <name>2_Exec</name>
@@ -1744,18 +1750,21 @@
             <group>
                 <name>3_Data</name>
                 <file>
-                    <name>$PROJ_DIR$\..\User\03_App\APP_DATA_Record.c</name>
-                </file>
-                <file>
                     <name>$PROJ_DIR$\..\User\03_App\APP_DATA_Config.h</name>
                 </file>
                 <file>
                     <name>$PROJ_DIR$\..\User\03_App\APP_DATA_ErrorCode.h</name>
                 </file>
                 <file>
+                    <name>$PROJ_DIR$\..\User\03_App\APP_DATA_Record.c</name>
+                </file>
+                <file>
                     <name>$PROJ_DIR$\..\User\03_App\APP_DATA_Record.h</name>
                 </file>
             </group>
         </group>
+        <file>
+            <name>$PROJ_DIR$\..\User\System_Main.c</name>
+        </file>
     </group>
 </project>

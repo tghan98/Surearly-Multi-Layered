@@ -43,7 +43,11 @@ typedef struct
 } Meas_Ctx;
 
 /* Private variables ---------------------------------------------------------*/
-static Meas_Ctx s_meas;
+/* __near: this buffer lives in RAM above page zero. Page zero is only
+   256 bytes and every variable defaults there in the small data model;
+   the bulk buffers are moved out so the frequently touched state can
+   stay in the short-addressed page. See EWSTM8/MFx_Layered.icf. */
+__near static Meas_Ctx s_meas;
 
 /* Private function prototypes -----------------------------------------------*/
 static void     s_JudgeStick(void);
@@ -348,6 +352,27 @@ uint16_t APP_EXEC_Measure_GetStickValue(void)
 const uint16_t *APP_EXEC_Measure_GetInitial(void)
 {
     return s_meas.awInitial;
+}
+
+uint16_t APP_EXEC_Measure_Intensity(uint16_t wDividend, uint16_t wDivisor)
+{
+    uint16_t wQuotient = 0u;
+    uint16_t wTmp;
+    uint8_t bDigit;
+
+    /* Four decimal digits, exactly as CalculateIntensity in DM_Utill.c.
+       Do not widen the remainder: its 16-bit wrap is shipped behaviour. */
+    if ((wDividend != 0u) && (wDivisor != 0u))
+    {
+        for (bDigit = 0u; bDigit < 4u; bDigit++)
+        {
+            wTmp = wDividend / wDivisor;
+            wQuotient = (uint16_t)(wQuotient * 10u + wTmp);
+            wDividend = (uint16_t)(wDividend - wTmp * wDivisor);
+            wDividend = (uint16_t)(wDividend * 10u);
+        }
+    }
+    return wQuotient;
 }
 
 /*****************************END OF FILE****/

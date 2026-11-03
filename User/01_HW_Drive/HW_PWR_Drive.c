@@ -32,8 +32,13 @@ Ret_t HW_PWR_PrepareHalt(void)
     /* Ultra-low-power regulator: this is most of the 382 uA -> 71 uA step. */
     PWR_UltraLowPowerCmd(ENABLE);
 
-    /* The time base must stop too, or Halt is never reached. */
+    /* Gate every peripheral clock. Keeping this in one place matches the old
+       Power_PrepareSleep(), and the measured 71 uA depends on all three being
+       off. Pins are parked by the module that owns them (Lcd_Park,
+       Optic_Abort) - this driver only handles the power domain. */
     CLK_PeripheralClockConfig(CLK_Peripheral_TIM4, DISABLE);
+    CLK_PeripheralClockConfig(CLK_Peripheral_ADC1, DISABLE);
+    CLK_PeripheralClockConfig(CLK_Peripheral_USART1, DISABLE);
 
     return RET_OK;
 }

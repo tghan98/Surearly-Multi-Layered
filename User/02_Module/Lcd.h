@@ -86,6 +86,17 @@ Ret_t Lcd_SetIcon(Lcd_Icon tIcon, Lcd_State tState);
   */
 Ret_t Lcd_SetAll(Lcd_State tState);
 
+/**
+  * @brief  Clears every icon and drives COM and all SEG lines low.
+  * @note   Layer: Module. Blocking: no. ISR: no.
+  *         For the moment before the unit goes into deep sleep. With both
+  *         sides at the same level the panel sees no voltage, which is the
+  *         only state in which it is safe to stop refreshing.
+  *         Lcd_Init() brings it back.
+  * @retval RET_OK
+  */
+Ret_t Lcd_Park(void);
+
 /* Getters (cannot fail) -----------------------------------------------------*/
 /**
   * @brief  What one icon is currently set to.

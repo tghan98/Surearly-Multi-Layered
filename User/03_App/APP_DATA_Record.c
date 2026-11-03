@@ -48,7 +48,11 @@ typedef struct
 } Record_Ctx;
 
 /* Private variables ---------------------------------------------------------*/
-static Record_Ctx s_rec;
+/* __near: this buffer lives in RAM above page zero. Page zero is only
+   256 bytes and every variable defaults there in the small data model;
+   the bulk buffers are moved out so the frequently touched state can
+   stay in the short-addressed page. See EWSTM8/MFx_Layered.icf. */
+__near static Record_Ctx s_rec;
 
 /* Private function prototypes -----------------------------------------------*/
 static uint8_t s_Clean(uint8_t bRaw);

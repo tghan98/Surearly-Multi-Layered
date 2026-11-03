@@ -17,14 +17,20 @@
 #include "Lcd.h"
 #include "PcComm.h"
 #include "APP_DATA_Record.h"
+#include "APP_CTRL_Sequence.h"
 #include "APP_EXEC_Measure.h"
 #include "Optic.h"
 #include "stm8l15x.h"
 #include "stm8l15x_rst.h"
 
 /* Build switches (manual) ---------------------------------------------------*/
+/* Slot run and late counters. Development instrumentation, not a feature:
+   nothing in the firmware reads them, they exist for a debugger session.
+   Turned off for release because this part has 8 KB of flash and the port
+   needed the space (spec v2.0.3 §12 allows exactly this). Set to 1 while
+   investigating a slot that overruns. (2026-11-03) */
 #ifndef SYS_USE_SLOT_STAT
-#define SYS_USE_SLOT_STAT        1
+#define SYS_USE_SLOT_STAT        0
 #endif
 #if ((SYS_USE_SLOT_STAT != 0) && (SYS_USE_SLOT_STAT != 1))
 #error "SYS_USE_SLOT_STAT must be 0 or 1"
@@ -34,16 +40,6 @@
 #define SYS_USE_WDG              0
 #endif
 
-/* TEMPORARY: proof of life. The BOOK icon blinks at 500 ms so that a board
-   test can confirm clock, tick, slots, GPIO and LCD drive at once, and so
-   that the TIM4 rate can be calibrated with a stopwatch (60 s should give
-   60 blinks). Remove once the App drives the display. */
-#ifndef SYS_USE_BLINK_TEST
-#define SYS_USE_BLINK_TEST       1
-#endif
-#if ((SYS_USE_BLINK_TEST != 0) && (SYS_USE_BLINK_TEST != 1))
-#error "SYS_USE_BLINK_TEST must be 0 or 1"
-#endif
 #if ((SYS_USE_WDG != 0) && (SYS_USE_WDG != 1))
 #error "SYS_USE_WDG must be 0 or 1"
 #endif
@@ -131,6 +127,12 @@ static void s_Slot10ms(void)
     /* App: data first, it is the layer the others read from. */
     (void)APP_DATA_Record_Process();
     (void)APP_EXEC_Measure_Process();
+
+    /* Apps run in RUN only (spec v2.0.3 §5-3). */
+    if (s_sys.tState == SYS_STATE_RUN)
+    {
+        (void)APP_CTRL_Sequence_Process();
+    }
 }
 
 static void s_StateMachine(void)
@@ -231,11 +233,8 @@ Ret_t System_Main_Init(void)
     }
 
     (void)APP_EXEC_Measure_Init();
+    (void)APP_CTRL_Sequence_Init();
 
-#if (SYS_USE_BLINK_TEST == 1)
-    /* TEMPORARY: see the build switch block above. */
-    (void)Lcd_SetIcon(LCD_ICON_BOOK, LCD_BLINK);
-#endif
 
     /* 4. App: parameters, command gate, control. */
 

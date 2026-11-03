@@ -1,0 +1,97 @@
+/*###ICF### Section handled by ICF editor, don't touch! ****/
+/*-Editor annotation file-*/
+/* IcfEditorFile="$TOOLKIT_DIR$\config\ide\IcfEditor\b_ICF_Editor_STM8.xml" */
+
+/*-Specials-*/
+define symbol __ICFEDIT_intvec_start__ = 0x008000;
+
+/*-Memory Regions-*/
+/* STM8L151F3: 8 KB flash, 1 KB RAM, 256 B data EEPROM.
+   Page zero (0x0000-0x00FF) is the only RAM an 8-bit address reaches, so the
+   small data model puts every variable there. The 512 bytes above it were
+   unused until this file; .near sections now land there.
+
+   The gap below CSTACK is deliberate. The stack grows downwards out of
+   0x0300, and nothing detects it running past its block. With the gap, an
+   overflow lands in unused memory instead of overwriting a variable. Its
+   size is a guess until the stack high-water mark is measured - see the
+   design document, section 9. (2026-11-03) */
+define symbol __ICFEDIT_region_ROM_start__   = 0x008000;
+define symbol __ICFEDIT_region_ROM_end__     = 0x009FFF;
+
+define symbol __ICFEDIT_region_RAM_start__   = 0x000000;
+define symbol __ICFEDIT_region_RAM_end__     = 0x0003FF;
+
+define symbol region_PAGE0_start__           = 0x000000;
+define symbol region_PAGE0_end__             = 0x0000FF;
+
+define symbol region_NEARRAM_start__         = 0x000100;
+define symbol region_NEARRAM_end__           = 0x0002BF;   /* gap: 2C0..2FF */
+
+define symbol __ICFEDIT_region_EEPROM_start__ = 0x001000;
+define symbol __ICFEDIT_region_EEPROM_end__   = 0x0010FF;
+
+/*-Sizes-*/
+define symbol __ICFEDIT_size_cstack__ = 0x100;
+/* No heap: nothing in this firmware allocates at run time, and the spec bans
+   dynamic allocation outright (v2.0.3 §1 "Banned"). */
+
+/**** End of ICF editor section. ###ICF###*/
+
+define memory mem with size = 16M;
+
+define region ROM_region    = mem:[from __ICFEDIT_region_ROM_start__
+                                  to __ICFEDIT_region_ROM_end__];
+define region PAGE0_region  = mem:[from region_PAGE0_start__
+                                  to region_PAGE0_end__];
+define region NEAR_region   = mem:[from region_NEARRAM_start__
+                                  to region_NEARRAM_end__];
+define region RAM_region    = mem:[from __ICFEDIT_region_RAM_start__
+                                  to __ICFEDIT_region_RAM_end__];
+define region EEPROM_region = mem:[from __ICFEDIT_region_EEPROM_start__
+                                  to __ICFEDIT_region_EEPROM_end__];
+
+define block CSTACK with alignment = 1, size = __ICFEDIT_size_cstack__ { };
+define block INTVEC with size = 0x80 { ro section .intvec };
+
+initialize by copy { rw section .far.data, rw section .near.data,
+                     rw section .tiny.data, rw section .huge.data };
+
+do not initialize { rw section .eeprom.noinit, rw section .far.noinit,
+                    rw section .huge.noinit,   rw section .near.noinit,
+                    rw section .tiny.noinit,   rw section .vregs };
+
+place at address mem:__ICFEDIT_intvec_start__ { block INTVEC };
+
+place at start of PAGE0_region { rw section .vregs };
+place in PAGE0_region          { rw section .tiny.bss,
+                                 rw section .tiny.data,
+                                 rw section .tiny.noinit,
+                                 rw section .tiny.rodata };
+
+place in NEAR_region           { rw section .near.bss,
+                                 rw section .near.data,
+                                 rw section .near.noinit };
+
+place at end of RAM_region     { block CSTACK };
+
+place in ROM_region            { ro section __DLIB_PERTHREAD_init,
+                                 ro section .far.data_init,
+                                 ro section .far_func.textrw_init,
+                                 ro section .huge.data_init,
+                                 ro section .huge_func.textrw_init,
+                                 ro section .iar.init_table,
+                                 ro section .init_array,
+                                 ro section .near.data_init,
+                                 ro section .near.rodata,
+                                 ro section .near_func.text,
+                                 ro section .near_func.textrw_init,
+                                 ro section .tiny.data_init,
+                                 ro section .tiny.rodata_init };
+place in ROM_region            { ro section .far.rodata,
+                                 ro section .far_func.text };
+place in ROM_region            { ro section .huge.rodata,
+                                 ro section .huge_func.text };
+
+place in EEPROM_region         { rw section .eeprom.data,
+                                 rw section .eeprom.noinit };

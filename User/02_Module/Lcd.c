@@ -147,6 +147,22 @@ Ret_t Lcd_SetAll(Lcd_State tState)
     return RET_OK;
 }
 
+Ret_t Lcd_Park(void)
+{
+    uint8_t bIcon;
+
+    for (bIcon = 0u; bIcon < (uint8_t)LCD_ICON_COUNT; bIcon++)
+    {
+        s_lcd.atIcon[bIcon] = LCD_OFF;
+        (void)HW_GPIO_Write(s_segMap[bIcon], HW_GPIO_LEVEL_LOW);
+    }
+
+    (void)HW_GPIO_Write(HW_GPIO_LCD_COM, HW_GPIO_LEVEL_LOW);
+    s_lcd.bComPhase = 0u;
+
+    return RET_OK;
+}
+
 Lcd_State Lcd_GetIcon(Lcd_Icon tIcon)
 {
     if ((uint8_t)tIcon >= (uint8_t)LCD_ICON_COUNT)
