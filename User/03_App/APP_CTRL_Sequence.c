@@ -305,8 +305,13 @@ static void s_StepStickInsert(void)
                 break;
             }
 
+            /* DROP steady, not blinking. The old FW blinks DROP only while
+                the reaction runs and on a stick-removed error, so a blink
+                here reads to the operator as "wait", and the sample never
+                gets loaded. (old DM_App_LCD_Sq_SampleLoadWait_Process)
+                (found on the bench 2026-11-03) */
             (void)Lcd_SetAll(LCD_OFF);
-            (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_BLINK);
+            (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_ON);
 
             s_GoStep(APP_SEQ_SAMPLE_LOAD_WAIT);
             break;
@@ -573,11 +578,9 @@ static void s_StepOverSampleCheck(void)
 {
     s_SampleCheck(APP_OVER_SAMPLE_CHECK_TK, s_seq.awResultBand[OPTIC_CH_C],
                   APP_OVER_FLOW_RATIO, APP_SEQ_LOW_SAMPLE_CHECK, APP_ERR_OVER_FLOW);
-    if (s_seq.tStep == APP_SEQ_LOW_SAMPLE_CHECK)
-    {
-        (void)Lcd_SetAll(LCD_OFF);
-        (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_BLINK);
-    }
+    /* The display does not change here. The old FW leaves DROP steady
+       through both sample checks and starts the blink when the reaction
+       wait begins. */
 }
 
 static void s_StepLowSampleCheck(void)
@@ -591,6 +594,11 @@ static void s_StepReactionWait(void)
 {
     if (s_seq.tPhase == SEQ_PH_ENTER)
     {
+        /* DROP starts blinking here, where the reaction begins
+           (old DM_App_LCD_Sq_ReactionWait_Process). */
+        (void)Lcd_SetAll(LCD_OFF);
+        (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_BLINK);
+
         s_seq.wStart = HW_Tick_Get();
         s_seq.wSleepStart = s_seq.wStart;
         s_seq.tPhase = SEQ_PH_WAIT;

@@ -10,6 +10,7 @@
 #include "APP_CTRL_Sequence.h"
 #include "APP_DATA_Config.h"
 #include "APP_DATA_Record.h"
+#include "Eeprom.h"
 #include "PcComm.h"
 #include "HW_PWR_Drive.h"
 #include "HW_UART_Drive.h"
@@ -21,6 +22,11 @@
 #define CMD_VER_BUILD_LEN        8u
 #define CMD_LOT_PREFIX_LEN       4u
 #define CMD_LOT_SUFFIX_LEN       5u
+
+/* Upper bound on the flush before a Q reset. Four blocks, one per pass,
+   land in about 50 ms when the EEPROM answers. Ten times that, so a dead
+   EEPROM cannot leave the unit sitting with no reaction at all. */
+#define CMD_FLUSH_TIMEOUT_TK     HW_TICK_MS(500u)
 
 /* Private variables ---------------------------------------------------------*/
 /* C drops the terminating NUL when a string literal exactly fills the array,
@@ -121,8 +127,9 @@ Ret_t APP_CTRL_Cmd_Init(void)
 
 Ret_t APP_CTRL_Cmd_Process(void)
 {
-    uint8_t bCmd;
-    uint8_t bUpper;
+    uint8_t  bCmd;
+    uint8_t  bUpper;
+    uint16_t wStart;
 
     if (PcComm_GetCmd(&bCmd) == 0u)
     {
@@ -145,6 +152,21 @@ Ret_t APP_CTRL_Cmd_Process(void)
 
         case 'Q':
             (void)APP_CTRL_Sequence_RestartQc();
+
+            /* RestartQc() only marks the counters dirty; the EEPROM write
+               itself happens in APP_DATA_Record_Process(), one block per
+               10 ms pass. A reset before those land throws the reset away -
+               the unit comes back reading the OLD counts out of EEPROM.
+               So drive the write here and wait for it, bounded.
+               (found on the bench 2026-11-03, fixed the same day) */
+            wStart = HW_Tick_Get();
+            while ((APP_DATA_Record_IsBusy() != 0u)
+                   && (HW_Tick_Elapsed(wStart) < CMD_FLUSH_TIMEOUT_TK))
+            {
+                (void)APP_DATA_Record_Process();
+                (void)Eeprom_Process();
+            }
+
             s_Send((const uint8_t *)s_acAck, 4u);
             /* HW_UART_Write only returns once the last byte has left the
                shift register, so the reply is on the wire before this. */

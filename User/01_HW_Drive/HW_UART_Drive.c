@@ -34,13 +34,37 @@ Ret_t HW_UART_Init(void)
 {
     CLK_PeripheralClockConfig(CLK_Peripheral_USART1, ENABLE);
 
-    /* USART1 defaults to PC3/PC2; this board wires it to PA2/PA3. */
-    SYSCFG_REMAPPinConfig(REMAP_Pin_USART1TxRxPortA, ENABLE);
+    /* USART1 defaults to PC3/PC2; this board wires it to PA2/PA3.
+       RMPCR1 bits 5:4 select the mapping, 01 = PA2/PA3. Written directly:
+       SYSCFG_REMAPPinConfig() decodes a register index and a mask out of its
+       argument to reach these two bits and costs 73 bytes of flash. */
+    SYSCFG->RMPCR1 = (uint8_t)((SYSCFG->RMPCR1 & (uint8_t)0xCFu)
+                               | (uint8_t)0x10u);
 
     USART_DeInit(USART1);
-    USART_Init(USART1, HW_UART_BAUD, USART_WordLength_8b, USART_StopBits_1,
-               USART_Parity_No,
-               (USART_Mode_TypeDef)(USART_Mode_Tx | USART_Mode_Rx));
+
+    /* 9600 8N1, written directly. USART_Init() derives the divider at run
+       time: it calls CLK_GetClockFreq() and divides by the baud rate, which
+       pulls in 32-bit division and costs 174 bytes of flash. Nothing here
+       varies - fMASTER is HSI/8 and the baud rate is fixed - so the divider
+       is a constant, worked out below.
+
+       USARTDIV = fMASTER / baud = 2000000 / 9600 = 208 (0x0D0).
+       The register layout is not a plain 16-bit value: BRR2 carries the
+       top nibble [15:12] and the fraction [3:0], BRR1 carries [11:4].
+         BRR2 = ((208 >> 8) & 0xF0) | (208 & 0x0F) = 0x00
+         BRR1 = 208 >> 4                           = 0x0D
+       Real baud is 2000000 / 208 = 9615, 0.16 % high. Well inside the
+       tolerance of 8N1 framing, and the same value USART_Init() computed.
+       BRR2 must be written before BRR1: writing BRR1 latches the pair.
+
+       After USART_DeInit() CR1 and CR3 hold their reset values, which are
+       already 8-bit word, no parity, 1 stop bit, so neither is touched. */
+    USART1->BRR2 = (uint8_t)0x00u;
+    USART1->BRR1 = (uint8_t)0x0Du;
+
+    /* TEN | REN: transmitter and receiver on. */
+    USART1->CR2 |= (uint8_t)(USART_Mode_Tx | USART_Mode_Rx);
 
     s_bRxHead = 0u;
     s_bRxTail = 0u;
