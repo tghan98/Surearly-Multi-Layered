@@ -43,6 +43,7 @@ typedef enum
     SEQ_PH_CHANNEL,
     SEQ_PH_SAVE,
     SEQ_PH_SAVED,
+    SEQ_PH_ANIM,           /* waiting for an LCD animation to finish */
     SEQ_PH_COUNT
 } Seq_Phase;
 
@@ -82,10 +83,55 @@ typedef struct
    stay in the short-addressed page. See EWSTM8/MFx_Layered.icf. */
 __near static Seq_Ctx s_seq;
 
+/* LCD animation tables -------------------------------------------------------
+   What the panel shows is an App decision; Lcd only plays the table
+   (spec v2.0.3 §8). Hold values are refresh ticks of 10 ms, the same
+   numbers the old FW used. Carried over from MFx_New_Ver
+   DM_LCD_Stick_Check_App.c gs_atStickInsertAnim / gs_atErrOverUsedAnim. */
+#define SEQ_ANIM_HOLD            50u    /* 500 ms */
+
+/* Stick inserted: three whole-panel flashes, then each icon once.
+   Total about 4.5 s - the unit waits for it before asking for the sample,
+   as the old FW did. */
+static const Lcd_AnimStep s_animStickInsert[] =
+{
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_DROP, (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_YES,  (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_NO,   (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_BOOK, (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_DROP, (uint8_t)LCD_ON,  SEQ_ANIM_HOLD }
+};
+#define SEQ_ANIM_INSERT_STEPS  (sizeof(s_animStickInsert) / sizeof(s_animStickInsert[0]))
+
+/* Used up: the four icons cycle until the stick is pulled out. */
+static const Lcd_AnimStep s_animOverUsed[] =
+{
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_BOOK, (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_NO,   (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_YES,  (uint8_t)LCD_ON,  SEQ_ANIM_HOLD },
+    { (uint8_t)LCD_ICON_ALL,  (uint8_t)LCD_OFF, 0u            },
+    { (uint8_t)LCD_ICON_DROP, (uint8_t)LCD_ON,  SEQ_ANIM_HOLD }
+};
+#define SEQ_ANIM_OVERUSED_STEPS (sizeof(s_animOverUsed) / sizeof(s_animOverUsed[0]))
+
 /* Private function prototypes -----------------------------------------------*/
 static void s_GoStep(APP_CTRL_Sequence_Step tStep);
-static void s_EnterError(APP_DATA_ErrorCode tCode, Lcd_Icon tIcon);
-static void s_InitialOpticError(APP_DATA_ErrorCode tCode, Lcd_Icon tIcon);
+static void s_ShowError(APP_DATA_ErrorCode tCode);
+static void s_EnterError(APP_DATA_ErrorCode tCode);
+static void s_InitialOpticError(APP_DATA_ErrorCode tCode);
 static void s_ClearRun(void);
 static void s_StepIdle(void);
 static void s_StepStickInsert(void);
@@ -109,25 +155,48 @@ static void s_GoStep(APP_CTRL_Sequence_Step tStep)
     s_seq.wStart = HW_Tick_Get();
 }
 
+/* The panel an error shows is decided here, from the error code, not by the
+   caller. Letting each call site pass an icon is how the port lost the old
+   FW's three distinct displays and showed everything as a blink
+   (found on the bench 2026-11-03). The old mapping is: STICK_REMOVE gets
+   BOOK plus a blinking DROP, OVER_USED gets the four-icon cycle, and every
+   other error gets the steady BOOK of the old LCD_SQ_ERR_STICK_FAIL. */
+static void s_ShowError(APP_DATA_ErrorCode tCode)
+{
+    if (tCode == APP_ERR_OVER_USED)
+    {
+        (void)Lcd_PlayAnim(s_animOverUsed,
+                           (uint8_t)SEQ_ANIM_OVERUSED_STEPS, 1u);
+        return;
+    }
+
+    (void)Lcd_SetAll(LCD_OFF);
+    (void)Lcd_SetIcon(LCD_ICON_BOOK, LCD_ON);
+
+    if (tCode == APP_ERR_STICK_REMOVE)
+    {
+        (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_BLINK);
+    }
+}
+
 /* Show the error and hold it for APP_ERR_RUN_TIME_TK. */
-static void s_EnterError(APP_DATA_ErrorCode tCode, Lcd_Icon tIcon)
+static void s_EnterError(APP_DATA_ErrorCode tCode)
 {
     s_seq.tError     = tCode;
     s_seq.bErrorStep = (uint8_t)s_seq.tStep;
 
-    (void)Lcd_SetAll(LCD_OFF);
-    (void)Lcd_SetIcon(tIcon, LCD_BLINK);
+    s_ShowError(tCode);
 
     s_GoStep(APP_SEQ_ERROR_WAIT);
 }
 
 /* A failure during the initial optics: shown only on a QC cycle. Otherwise
    it is recorded and the unit goes quietly back to sleep, as before. */
-static void s_InitialOpticError(APP_DATA_ErrorCode tCode, Lcd_Icon tIcon)
+static void s_InitialOpticError(APP_DATA_ErrorCode tCode)
 {
     if (s_seq.bQcCycle != 0u)
     {
-        s_EnterError(tCode, tIcon);
+        s_EnterError(tCode);
     }
     else
     {
@@ -233,7 +302,7 @@ static void s_StepIdle(void)
 
                 if (s_seq.bQcCycle != 0u)
                 {
-                    s_EnterError(APP_ERR_STICK_FAIL, LCD_ICON_NO);
+                    s_EnterError(APP_ERR_STICK_FAIL);
                 }
                 else
                 {
@@ -262,7 +331,7 @@ static void s_StepStickInsert(void)
 
             if (s_seq.bTestCount >= (uint8_t)APP_SCAN_MAX_COUNT)
             {
-                s_EnterError(APP_ERR_OVER_USED, LCD_ICON_NO);
+                s_EnterError(APP_ERR_OVER_USED);
                 break;
             }
 
@@ -270,6 +339,13 @@ static void s_StepStickInsert(void)
             {
                 break;      /* optics still busy, try again next pass */
             }
+
+            /* Started here, not on step entry: entry can be re-run while the
+               optics are busy, and the animation would restart each pass.
+               It plays while the nine initial readings are taken. */
+            (void)Lcd_PlayAnim(s_animStickInsert,
+                               (uint8_t)SEQ_ANIM_INSERT_STEPS, 0u);
+
             s_seq.tPhase = SEQ_PH_WAIT;
             break;
 
@@ -283,7 +359,7 @@ static void s_StepStickInsert(void)
                so a partial set never reaches the stored record. */
             if (APP_EXEC_Measure_GetResult() != APP_EXEC_MEASURE_DONE)
             {
-                s_InitialOpticError(APP_ERR_STICK_REMOVE, LCD_ICON_BOOK);
+                s_InitialOpticError(APP_ERR_STICK_REMOVE);
                 break;
             }
 
@@ -294,22 +370,34 @@ static void s_StepStickInsert(void)
             tErr = APP_EXEC_Measure_TuneGain();
             if (tErr != APP_ERR_NONE)
             {
-                s_InitialOpticError(tErr, LCD_ICON_NO);
+                s_InitialOpticError(tErr);
                 break;
             }
 
             tErr = APP_EXEC_Measure_GetScaledSet(s_seq.awScaled);
             if (tErr != APP_ERR_NONE)
             {
-                s_InitialOpticError(tErr, LCD_ICON_NO);
+                s_InitialOpticError(tErr);
+                break;
+            }
+
+            /* The readings are done (about 0.28 s) but the insert animation
+               runs about 4.5 s. The old FW waited for it before asking for
+               the sample, so this does too. */
+            s_seq.tPhase = SEQ_PH_ANIM;
+            break;
+
+        case SEQ_PH_ANIM:
+            if (Lcd_IsAnimBusy() != 0u)
+            {
                 break;
             }
 
             /* DROP steady, not blinking. The old FW blinks DROP only while
-                the reaction runs and on a stick-removed error, so a blink
-                here reads to the operator as "wait", and the sample never
-                gets loaded. (old DM_App_LCD_Sq_SampleLoadWait_Process)
-                (found on the bench 2026-11-03) */
+               the reaction runs and on a stick-removed error, so a blink
+               here reads to the operator as "wait", and the sample never
+               gets loaded. (old DM_App_LCD_Sq_SampleLoadWait_Process)
+               (found on the bench 2026-11-03) */
             (void)Lcd_SetAll(LCD_OFF);
             (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_ON);
 
@@ -328,16 +416,11 @@ static uint16_t s_Ratio(uint16_t wValue, uint16_t wPercent)
     return (uint16_t)(((uint32_t)wValue * wPercent) / OPTIC_GAIN_SCALE);
 }
 
-/* The old STICK_FAIL display is BOOK steady; STICK_REMOVE adds DROP blink.
-   Keep the existing initial-optics display handling separate. */
+/* Kept as a name the sequence steps read well with; the display choice
+   itself lives in s_ShowError(). */
 static void s_SequenceError(APP_DATA_ErrorCode tError)
 {
-    s_EnterError(tError, LCD_ICON_BOOK);
-    (void)Lcd_SetIcon(LCD_ICON_BOOK, LCD_ON);
-    if (tError == APP_ERR_STICK_REMOVE)
-    {
-        (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_BLINK);
-    }
+    s_EnterError(tError);
 }
 
 /* One legacy 250 ms sleep, with the shipped 6250 ms optical recheck.
@@ -578,9 +661,21 @@ static void s_StepOverSampleCheck(void)
 {
     s_SampleCheck(APP_OVER_SAMPLE_CHECK_TK, s_seq.awResultBand[OPTIC_CH_C],
                   APP_OVER_FLOW_RATIO, APP_SEQ_LOW_SAMPLE_CHECK, APP_ERR_OVER_FLOW);
-    /* The display does not change here. The old FW leaves DROP steady
-       through both sample checks and starts the blink when the reaction
-       wait begins. */
+
+    /* DROP starts blinking the moment the over-sample check passes, not at
+       the reaction wait 20 s later. The old FW sets its LCD step to
+       REACTION_WAIT right here (DM_Main_Sq_App.c:529), from the sequence
+       handler - the LCD file's own OVER/LOW_SAMPLE_CHECK cases are empty
+       because the display was already set. Reading only the LCD file is how
+       this was first put 20 s late.
+       The blink therefore covers 20 s + 155 s = 175 s, which is the
+       "blinks, then about 3 minutes" in the user manual.
+       (corrected on the bench 2026-11-03) */
+    if (s_seq.tStep == APP_SEQ_LOW_SAMPLE_CHECK)
+    {
+        (void)Lcd_SetAll(LCD_OFF);
+        (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_BLINK);
+    }
 }
 
 static void s_StepLowSampleCheck(void)
@@ -594,11 +689,8 @@ static void s_StepReactionWait(void)
 {
     if (s_seq.tPhase == SEQ_PH_ENTER)
     {
-        /* DROP starts blinking here, where the reaction begins
-           (old DM_App_LCD_Sq_ReactionWait_Process). */
-        (void)Lcd_SetAll(LCD_OFF);
-        (void)Lcd_SetIcon(LCD_ICON_DROP, LCD_BLINK);
-
+        /* No display change: DROP has been blinking since the over-sample
+           check passed. */
         s_seq.wStart = HW_Tick_Get();
         s_seq.wSleepStart = s_seq.wStart;
         s_seq.tPhase = SEQ_PH_WAIT;

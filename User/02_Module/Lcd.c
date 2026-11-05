@@ -18,6 +18,12 @@ typedef struct
     uint8_t   bBlinkOn;       /* current half of the blink period   */
     uint16_t  wBlinkStart;
     uint16_t  wRefreshLast;
+
+    const Lcd_AnimStep *p_anim;   /* NULL when nothing is playing */
+    uint8_t   bAnimCount;
+    uint8_t   bAnimNext;          /* line to apply on the next advance */
+    uint8_t   bAnimHold;          /* refresh ticks left on this line   */
+    uint8_t   bAnimRepeat;
 } Lcd_Ctx;
 
 /* Private variables ---------------------------------------------------------*/
@@ -32,6 +38,76 @@ static const HW_GPIO_Id s_segMap[LCD_ICON_COUNT] =
     [LCD_ICON_NO]   = HW_GPIO_LCD_SEG_NO
 };
 
+/* Private function prototypes -----------------------------------------------*/
+static void s_SetIconRaw(uint8_t bIcon, uint8_t bState);
+static void s_AnimAdvance(void);
+
+/* Private functions ---------------------------------------------------------*/
+/* Writes the state without cancelling a running animation. The public
+   setters cancel; the player must not cancel itself. */
+static void s_SetIconRaw(uint8_t bIcon, uint8_t bState)
+{
+    uint8_t i;
+
+    if (bIcon == (uint8_t)LCD_ICON_ALL)
+    {
+        for (i = 0u; i < (uint8_t)LCD_ICON_COUNT; i++)
+        {
+            s_lcd.atIcon[i] = (Lcd_State)bState;
+        }
+    }
+    else if (bIcon < (uint8_t)LCD_ICON_COUNT)
+    {
+        s_lcd.atIcon[bIcon] = (Lcd_State)bState;
+    }
+    else
+    {
+        /* out of range: ignore, the table is wrong */
+    }
+}
+
+/* One refresh tick of the player. A line with bHold 0 falls through to the
+   next one in the same tick, which is how the old FW's tables are written
+   (OFF then ON with no gap). */
+static void s_AnimAdvance(void)
+{
+    const Lcd_AnimStep *p_step;
+
+    if (s_lcd.p_anim == NULL)
+    {
+        return;
+    }
+
+    if (s_lcd.bAnimHold > 0u)
+    {
+        s_lcd.bAnimHold--;
+        return;
+    }
+
+    while (s_lcd.bAnimNext < s_lcd.bAnimCount)
+    {
+        p_step = &s_lcd.p_anim[s_lcd.bAnimNext];
+        s_lcd.bAnimNext++;
+
+        s_SetIconRaw(p_step->bIcon, p_step->bState);
+
+        if (p_step->bHold > 0u)
+        {
+            s_lcd.bAnimHold = p_step->bHold;
+            return;
+        }
+    }
+
+    if (s_lcd.bAnimRepeat != 0u)
+    {
+        s_lcd.bAnimNext = 0u;
+        return;
+    }
+
+    s_lcd.p_anim = NULL;
+    s_SetIconRaw((uint8_t)LCD_ICON_ALL, (uint8_t)LCD_OFF);
+}
+
 /* Functions -----------------------------------------------------------------*/
 Ret_t Lcd_Init(void)
 {
@@ -41,6 +117,12 @@ Ret_t Lcd_Init(void)
     {
         s_lcd.atIcon[bIcon] = LCD_OFF;
     }
+
+    s_lcd.p_anim        = NULL;
+    s_lcd.bAnimCount    = 0u;
+    s_lcd.bAnimNext     = 0u;
+    s_lcd.bAnimHold     = 0u;
+    s_lcd.bAnimRepeat   = 0u;
 
     s_lcd.bComPhase     = 0u;
     s_lcd.bBlinkOn      = 0u;
@@ -81,7 +163,11 @@ Ret_t Lcd_Process(void)
         s_lcd.bBlinkOn     = (s_lcd.bBlinkOn == 0u) ? 1u : 0u;
     }
 
-    /* 3. Drive each SEG: in phase with COM means off, anti-phase means on. */
+    /* 3. Advance a running animation, before the icons are driven below, so
+          a new line shows on this same pass. */
+    s_AnimAdvance();
+
+    /* 4. Drive each SEG: in phase with COM means off, anti-phase means on. */
     for (bIcon = 0u; bIcon < (uint8_t)LCD_ICON_COUNT; bIcon++)
     {
         switch (s_lcd.atIcon[bIcon])
@@ -125,6 +211,7 @@ Ret_t Lcd_SetIcon(Lcd_Icon tIcon, Lcd_State tState)
         return RET_ERR_PARAM;
     }
 
+    s_lcd.p_anim        = NULL;     /* an explicit display wins */
     s_lcd.atIcon[tIcon] = tState;
 
     return RET_OK;
@@ -139,6 +226,7 @@ Ret_t Lcd_SetAll(Lcd_State tState)
         return RET_ERR_PARAM;
     }
 
+    s_lcd.p_anim = NULL;            /* an explicit display wins */
     for (bIcon = 0u; bIcon < (uint8_t)LCD_ICON_COUNT; bIcon++)
     {
         s_lcd.atIcon[bIcon] = tState;
@@ -151,6 +239,7 @@ Ret_t Lcd_Park(void)
 {
     uint8_t bIcon;
 
+    s_lcd.p_anim = NULL;
     for (bIcon = 0u; bIcon < (uint8_t)LCD_ICON_COUNT; bIcon++)
     {
         s_lcd.atIcon[bIcon] = LCD_OFF;
@@ -161,6 +250,31 @@ Ret_t Lcd_Park(void)
     s_lcd.bComPhase = 0u;
 
     return RET_OK;
+}
+
+Ret_t Lcd_PlayAnim(const Lcd_AnimStep *p_steps, uint8_t bCount, uint8_t bRepeat)
+{
+    if (p_steps == NULL)
+    {
+        return RET_ERR_NULL;
+    }
+    if (bCount == 0u)
+    {
+        return RET_ERR_PARAM;
+    }
+
+    s_lcd.p_anim      = p_steps;
+    s_lcd.bAnimCount  = bCount;
+    s_lcd.bAnimNext   = 0u;
+    s_lcd.bAnimHold   = 0u;     /* first line applies on the next refresh */
+    s_lcd.bAnimRepeat = (bRepeat != 0u) ? 1u : 0u;
+
+    return RET_OK;
+}
+
+uint8_t Lcd_IsAnimBusy(void)
+{
+    return (s_lcd.p_anim != NULL) ? 1u : 0u;
 }
 
 Lcd_State Lcd_GetIcon(Lcd_Icon tIcon)

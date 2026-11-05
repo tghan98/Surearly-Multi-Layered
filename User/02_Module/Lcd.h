@@ -37,7 +37,8 @@ typedef enum
     LCD_ICON_DROP,
     LCD_ICON_YES,
     LCD_ICON_NO,
-    LCD_ICON_COUNT
+    LCD_ICON_COUNT,
+    LCD_ICON_ALL        /* animation steps only, never an index */
 } Lcd_Icon;
 
 typedef enum
@@ -47,6 +48,16 @@ typedef enum
     LCD_BLINK,
     LCD_STATE_COUNT
 } Lcd_State;
+
+/* One line of an animation: what to show, and for how long.
+   The table itself belongs to the App - this module plays it, it does not
+   know what "stick inserted" means (spec v2.0.3 §8). */
+typedef struct
+{
+    uint8_t bIcon;      /* Lcd_Icon, or LCD_ICON_ALL                       */
+    uint8_t bState;     /* Lcd_State                                       */
+    uint8_t bHold;      /* ticks to hold; 0 falls through to the next line */
+} Lcd_AnimStep;
 
 /* Exported constants --------------------------------------------------------*/
 #define LCD_REFRESH_TK           HW_TICK_MS(10u)   /* COM toggle period */
@@ -106,6 +117,28 @@ Ret_t Lcd_Park(void);
   * @retval LCD_OFF .. LCD_BLINK; LCD_OFF if the icon is out of range
   */
 Lcd_State Lcd_GetIcon(Lcd_Icon tIcon);
+
+/**
+  * @brief  Starts playing an animation table.
+  * @param  p_steps : table, must stay valid until the animation ends
+  *                   (point it at a const array, not a local)
+  * @param  bCount  : number of lines, 1 .. 255
+  * @param  bRepeat : 0 plays once and clears the panel, 1 loops forever
+  * @note   Layer: Module. Blocking: no. ISR: no.
+  *         Advanced by Lcd_Process(), one line per refresh tick.
+  *         Lcd_SetIcon(), Lcd_SetAll() and Lcd_Park() cancel it, so an error
+  *         display always wins over a running animation.
+  * @retval RET_OK, RET_ERR_NULL, RET_ERR_PARAM
+  */
+Ret_t Lcd_PlayAnim(const Lcd_AnimStep *p_steps, uint8_t bCount, uint8_t bRepeat);
+
+/**
+  * @brief  Tells whether an animation is still playing.
+  * @note   Layer: Module. Blocking: no. ISR: no.
+  *         A repeating animation never reports idle.
+  * @retval 1 while playing, 0 otherwise
+  */
+uint8_t Lcd_IsAnimBusy(void);
 
 #endif /* __LCD_H__ */
 /*****************************END OF FILE****/
