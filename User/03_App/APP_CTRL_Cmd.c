@@ -71,7 +71,7 @@ static void s_SendWords(const uint16_t *p_wSrc, uint8_t bCount)
     }
 }
 
-/* 249 bytes, about 260 ms on the wire at 9600 baud.
+/* 253 bytes, about 265 ms on the wire at 9600 baud.
    This blocks, as the old FW did (DM_App_Main_Sq_Send_RawDump).
    Streaming it across passes cost about 200 bytes of flash, which this part
    does not have. A dump is a service action taken by the QC operator, not
@@ -117,6 +117,16 @@ static void s_Dump(void)
     (void)APP_DATA_Record_GetWakeFail(&wMin, &wMax);
     s_SendWord(wMin);
     s_SendWord(wMax);
+
+    /* 5. The cut-off values this build was actually compiled with. The QC
+          program used to show what the lot sheet says the unit should hold;
+          these four bytes let it show what the unit does hold, so a build
+          made with the wrong constants is caught before it reaches a batch.
+          Appended at the end on purpose: every field before it keeps its
+          offset, so the packet is the 249-byte one plus four and the parser
+          only has to accept one more length. (2026-11-05) */
+    s_SendWord((uint16_t)APP_T_LINE_THRESHOLD);
+    s_SendWord((uint16_t)APP_C_LINE_THRESHOLD);
 }
 
 /* Functions -----------------------------------------------------------------*/

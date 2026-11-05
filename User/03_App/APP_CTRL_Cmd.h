@@ -13,7 +13,7 @@
   *
   * Anything else is ignored without a reply, as the old FW did.
   *
-  * The dump is 249 bytes, which is 260 ms on the wire at 9600 baud, and it
+  * The dump is 253 bytes, which is 265 ms on the wire at 9600 baud, and it
   * blocks for that time - the same as the old FW. Streaming it across passes
   * cost about 200 bytes of flash that this 8 KB part does not have. A dump is
   * a service action by the QC operator, not part of a running test, so the
