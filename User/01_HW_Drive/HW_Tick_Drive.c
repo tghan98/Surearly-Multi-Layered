@@ -12,10 +12,10 @@
 #include "stm8l15x_tim4.h"
 
 /* Private defines -----------------------------------------------------------*/
-/* 149, not the nominal 155: fMASTER runs about 4 % slow. Inherited from the
-   shipped FW, see the note in HW_Tick_Drive.h. */
+/* 155, the calculated value. See the note in HW_Tick_Drive.h: the shipped
+   FW's 149 was measured to be a correction that is not needed. */
 #define HW_TICK_PRESCALER        TIM4_Prescaler_128
-#define HW_TICK_ARR              149u
+#define HW_TICK_ARR              155u
 
 /* Private variables ---------------------------------------------------------*/
 /* Written by HW_Tick_Isr() only, read by the main loop. */

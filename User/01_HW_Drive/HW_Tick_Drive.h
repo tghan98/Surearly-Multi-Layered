@@ -16,11 +16,23 @@
   * The coarser step costs nothing: the shortest interval measured anywhere
   * is the 20 ms optical settle. (decided 2026-11-03)
   *
-  * HW_TICK_ARR is 149, not the nominal 155. fMASTER measures about 4 % below
-  * 2 MHz on this board, and the shipped FW compensates the same way (see
-  * MFx_New_Ver DM_HW_Drv.c, TIM4_TimeBaseInit(..., 149)). The value is
-  * inherited, not re-measured here; confirm it with the 100-blink test
-  * before shipping.
+  * HW_TICK_ARR is 155, the calculated value: 156 counts / 15625 Hz =
+  * 9.984 ms, which is 0.16 % short of 10 ms and the closest an 8-bit
+  * counter gets at this prescaler.
+  *
+  * The shipped FW uses 149 with the same prescaler and calls it an
+  * empirical correction for a slow fMASTER (MFx_New_Ver DM_HW_Drv.c).
+  * That was carried over here at first and then measured on 12 호기
+  * (2026-11-03): the reaction wait, specified as 155 s, came out at
+  * 149 s - matching 150 counts / 15625 Hz = 9.6 ms exactly. fMASTER is
+  * accurate, the correction was not needed, and the shipped product has
+  * been running every interval 4 % short (180 s reaction = 172.8 s).
+  *
+  * Changed to 155 so the specified times are the times that run.
+  * NOTE: this makes every interval about 4 % LONGER than the shipped
+  * product. Colour develops with time, so a result near a line threshold
+  * can move. 12 호기 was last seen at T Intensity 1034 against a 1040
+  * threshold - six counts.
   *
   * Responsibility boundary: this driver only counts. It does not know what any
   * period means; callers compare tick differences themselves.
