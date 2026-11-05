@@ -52,8 +52,8 @@
 #define APP_OPTIC_TUNE_TOLERANCE           25u   /* old OPTIC_TUNED_TOLERANCE  */
 
 /* Line intensity thresholds -------------------------------------------------*/
-#define APP_T_LINE_THRESHOLD             1040u   /* old _nT_LINE_INT_THRESHOLD */
-#define APP_C_LINE_THRESHOLD             1050u   /* old _nC_LINE_INT_THRESHOLD */
+#define APP_T_LINE_THRESHOLD             1080u   /* old _nT_LINE_INT_THRESHOLD */
+#define APP_C_LINE_THRESHOLD             1005u   /* old _nC_LINE_INT_THRESHOLD */
 
 /* Sample volume ratios (percent) --------------------------------------------*/
 #define APP_EMPTY_BTB_RATIO                90u   /* old _nEMPTY_BTB_RATIO      */
