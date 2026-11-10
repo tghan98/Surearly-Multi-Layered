@@ -101,13 +101,5 @@ APP_CTRL_Sequence_Step APP_CTRL_Sequence_GetStep(void);
   */
 APP_DATA_ErrorCode APP_CTRL_Sequence_GetError(void);
 
-/**
-  * @brief  Whether this run counts as one of the first few QC cycles, which
-  *         are shown on the display instead of failing silently.
-  * @note   Layer: App (control). Blocking: no. ISR: no.
-  * @retval 1 QC cycle, 0 ordinary use
-  */
-uint8_t APP_CTRL_Sequence_IsQcCycle(void);
-
 #endif /* __APP_CTRL_SEQUENCE_H__ */
 /*****************************END OF FILE****/

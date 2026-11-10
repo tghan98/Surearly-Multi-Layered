@@ -24,9 +24,6 @@
 #include "PcComm.h"
 
 /* Private defines -----------------------------------------------------------*/
-/* The first few insertions of a unit are treated as QC cycles: a failure is
-   shown on the display instead of returning to sleep without a sign. */
-#define SEQ_QC_CYCLE_LIMIT       5u
 #define SEQ_INSERT_COUNT_CAP   254u
 
 /* Wake-up switch check: one read per interval. A period, not a floor - the
@@ -63,7 +60,6 @@ typedef struct
     uint16_t               wStart;       /* step or phase entry tick       */
     APP_DATA_ErrorCode     tError;
     uint8_t                bErrorStep;   /* step the error happened in     */
-    uint8_t                bQcCycle;
     uint8_t                bTestCount;
     uint16_t               awScaled[APP_EXEC_MEASURE_INITIAL_WORDS];
     uint16_t               awEmptyBand[OPTIC_CH_COUNT];
@@ -134,7 +130,6 @@ static const Lcd_AnimStep s_animOverUsed[] =
 static void s_GoStep(APP_CTRL_Sequence_Step tStep);
 static void s_ShowError(APP_DATA_ErrorCode tCode);
 static void s_EnterError(APP_DATA_ErrorCode tCode);
-static void s_InitialOpticError(APP_DATA_ErrorCode tCode);
 static void s_ClearRun(void);
 static void s_StepIdle(void);
 static void s_StepStickInsert(void);
@@ -191,23 +186,6 @@ static void s_EnterError(APP_DATA_ErrorCode tCode)
     s_ShowError(tCode);
 
     s_GoStep(APP_SEQ_ERROR_WAIT);
-}
-
-/* A failure during the initial optics: shown only on a QC cycle. Otherwise
-   it is recorded and the unit goes quietly back to sleep, as before. */
-static void s_InitialOpticError(APP_DATA_ErrorCode tCode)
-{
-    if (s_seq.bQcCycle != 0u)
-    {
-        s_EnterError(tCode);
-    }
-    else
-    {
-        s_seq.tError     = tCode;
-        s_seq.bErrorStep = (uint8_t)s_seq.tStep;
-        (void)APP_DATA_Record_SetError(s_seq.bErrorStep, (uint8_t)tCode);
-        s_GoStep(APP_SEQ_IDLE);
-    }
 }
 
 static void s_ClearRun(void)
@@ -301,8 +279,6 @@ static void s_StepIdle(void)
                 bInsertCount++;
                 (void)APP_DATA_Record_SetInsertCount(bInsertCount);
             }
-            s_seq.bQcCycle = (bInsertCount <= (uint8_t)SEQ_QC_CYCLE_LIMIT)
-                             ? 1u : 0u;
             s_ClearRun();
             s_GoStep(APP_SEQ_STICK_INSERT);
             break;
@@ -314,8 +290,13 @@ static void s_StepIdle(void)
 }
 
 /* ---- Step 2: STICK_INSERT ------------------------------------------------*/
-/* Initial sweep, acceptance window, gain tuning, scaled set. The sweep is
-   nine measurements and takes about 280 ms; it now runs across passes. */
+/* Initial sweep, acceptance window, gain tuning, scaled set, then the insert
+   animation. The four readings come first (about 0.1 s) so that a reading
+   outside the window shows BOOK at once, before any animation - as the old
+   FW did (hs.kim, 2026-11-10). Every failure here is shown: the old rule of
+   showing it only on the first five insertions and otherwise going quietly
+   to sleep left a unit that seemed dead (review D4). Done in this step, not
+   in IDLE, so Error Step 2 in a dump keeps meaning "initial optics". */
 static void s_StepStickInsert(void)
 {
     APP_DATA_ErrorCode tErr;
@@ -336,12 +317,6 @@ static void s_StepStickInsert(void)
                 break;      /* optics still busy, try again next pass */
             }
 
-            /* Started here, not on step entry: entry can be re-run while the
-               optics are busy, and the animation would restart each pass.
-               It plays while the nine initial readings are taken. */
-            (void)Lcd_PlayAnim(s_animStickInsert,
-                               (uint8_t)SEQ_ANIM_INSERT_STEPS, 0u);
-
             s_seq.tPhase = SEQ_PH_WAIT;
             break;
 
@@ -351,35 +326,29 @@ static void s_StepStickInsert(void)
                 break;
             }
 
-            /* The sweep only reports DONE after its closing presence check,
-               so a partial set never reaches the stored record. */
-            if (APP_EXEC_Measure_GetResult() != APP_EXEC_MEASURE_DONE)
-            {
-                s_InitialOpticError(APP_ERR_STICK_REMOVE);
-                break;
-            }
-
+            /* A failed conversion is not handled apart: the channel it hit
+               was never written and reads zero, so TuneGain() below reports
+               OPTIC_FAIL on that very channel. */
             (void)APP_DATA_Record_SetStickPtr(APP_EXEC_Measure_GetInitial());
 
             /* Acceptance window and gain in one call: both walk the same four
                readings and fail on the same channel number. */
             tErr = APP_EXEC_Measure_TuneGain();
+            if (tErr == APP_ERR_NONE)
+            {
+                tErr = APP_EXEC_Measure_GetScaledSet(s_seq.awScaled);
+            }
             if (tErr != APP_ERR_NONE)
             {
-                s_InitialOpticError(tErr);
+                s_EnterError(tErr);
                 break;
             }
 
-            tErr = APP_EXEC_Measure_GetScaledSet(s_seq.awScaled);
-            if (tErr != APP_ERR_NONE)
-            {
-                s_InitialOpticError(tErr);
-                break;
-            }
-
-            /* The readings are done (about 0.28 s) but the insert animation
-               runs about 4.5 s. The old FW waited for it before asking for
-               the sample, so this does too. */
+            /* Readings good: now the insert animation, about 4.5 s. The old
+               FW waited for it before asking for the sample, so this does
+               too. */
+            (void)Lcd_PlayAnim(s_animStickInsert,
+                               (uint8_t)SEQ_ANIM_INSERT_STEPS, 0u);
             s_seq.tPhase = SEQ_PH_ANIM;
             break;
 
@@ -445,7 +414,7 @@ static uint8_t s_SleepAndCheckStick(APP_DATA_ErrorCode tError)
         }
         if (HW_Tick_Elapsed(s_seq.wStickStart) >= APP_STICK_CHECK_INTERVAL_TK)
         {
-            if (APP_EXEC_Measure_StartStickCheck(1u) == RET_OK)
+            if (APP_EXEC_Measure_StartStickCheck() == RET_OK)
             {
                 s_seq.wStickStart = HW_Tick_Get();
                 s_seq.bChecking = 1u;
@@ -813,7 +782,6 @@ Ret_t APP_CTRL_Sequence_Init(void)
     s_seq.wStart    = HW_Tick_Get();
     s_seq.tError     = APP_ERR_NONE;
     s_seq.bErrorStep = 0u;
-    s_seq.bQcCycle   = 0u;
     s_seq.bTestCount = 0u;
 
     return RET_OK;
@@ -875,7 +843,6 @@ Ret_t APP_CTRL_Sequence_RestartQc(void)
     (void)APP_DATA_Record_SetError(0u, (uint8_t)APP_ERR_NONE);
 
     s_ClearRun();
-    s_seq.bQcCycle = 1u;
     s_GoStep(APP_SEQ_IDLE);
 
     return RET_OK;
@@ -889,11 +856,6 @@ APP_CTRL_Sequence_Step APP_CTRL_Sequence_GetStep(void)
 APP_DATA_ErrorCode APP_CTRL_Sequence_GetError(void)
 {
     return s_seq.tError;
-}
-
-uint8_t APP_CTRL_Sequence_IsQcCycle(void)
-{
-    return s_seq.bQcCycle;
 }
 
 /*****************************END OF FILE****/

@@ -18,27 +18,16 @@ typedef enum
     MEAS_JOB_NONE = 0,
     MEAS_JOB_STICK,        /* one presence check              */
     MEAS_JOB_SINGLE,       /* one channel                     */
-    MEAS_JOB_INITIAL,      /* the nine-measurement sweep      */
+    MEAS_JOB_INITIAL,      /* the four-channel sweep          */
     MEAS_JOB_COUNT
 } Meas_Job;
-
-typedef enum
-{
-    MEAS_PHASE_CHECK = 0,  /* presence check before a channel */
-    MEAS_PHASE_CHANNEL,    /* the channel itself              */
-    MEAS_PHASE_FINAL,      /* closing presence check          */
-    MEAS_PHASE_COUNT
-} Meas_Phase;
 
 typedef struct
 {
     Meas_Job                tJob;
-    Meas_Phase              tPhase;
     APP_EXEC_Measure_Result tResult;
     uint8_t                 bCh;          /* channel under way            */
-    uint8_t                 bScaled;      /* axis of the presence check   */
     uint8_t                 bPresent;     /* last presence outcome        */
-    uint16_t                wStickValue;  /* reading it judged on         */
     uint16_t                awInitial[APP_EXEC_MEASURE_INITIAL_WORDS];
 } Meas_Ctx;
 
@@ -70,23 +59,14 @@ static Ret_t s_StartOptic(Optic_Ch tCh)
     return Optic_Start(tCh);
 }
 
-/* The C channel is the one that sees the stick (old OPTIC_CH_3). */
+/* The C channel is the one that sees the stick (old OPTIC_CH_3). Judged on
+   the gain-applied axis only: the raw-axis gate (2600) went with the switch
+   check and the plain four-channel sweep (2026-11-10). */
 static void s_JudgeStick(void)
 {
-    if (s_meas.bScaled != 0u)
-    {
-        s_meas.wStickValue = Optic_GetScaled(OPTIC_CH_C);
-        s_meas.bPresent = (s_meas.wStickValue
-                           < (uint16_t)APP_OPTIC_STICK_THRESHOLD_SCALED)
-                          ? 0u : 1u;
-    }
-    else
-    {
-        s_meas.wStickValue = Optic_GetRaw(OPTIC_CH_C);
-        s_meas.bPresent = (s_meas.wStickValue
-                           < (uint16_t)APP_OPTIC_STICK_THRESHOLD_RAW)
-                          ? 0u : 1u;
-    }
+    s_meas.bPresent = (Optic_GetScaled(OPTIC_CH_C)
+                       < (uint16_t)APP_OPTIC_STICK_THRESHOLD_SCALED)
+                      ? 0u : 1u;
 }
 
 /* Functions -----------------------------------------------------------------*/
@@ -94,13 +74,10 @@ Ret_t APP_EXEC_Measure_Init(void)
 {
     uint8_t bIdx;
 
-    s_meas.tJob        = MEAS_JOB_NONE;
-    s_meas.tPhase      = MEAS_PHASE_CHECK;
-    s_meas.tResult     = APP_EXEC_MEASURE_IDLE;
-    s_meas.bCh         = 0u;
-    s_meas.bScaled     = 0u;
-    s_meas.bPresent    = 0u;
-    s_meas.wStickValue = 0u;
+    s_meas.tJob     = MEAS_JOB_NONE;
+    s_meas.tResult  = APP_EXEC_MEASURE_IDLE;
+    s_meas.bCh      = 0u;
+    s_meas.bPresent = 0u;
 
     for (bIdx = 0u; bIdx < (uint8_t)APP_EXEC_MEASURE_INITIAL_WORDS; bIdx++)
     {
@@ -120,22 +97,22 @@ Ret_t APP_EXEC_Measure_StartInitial(void)
     }
 
     /* Only four channels are swept; the trailing words stay zero so that the
-       16-byte stored record and the PC-side parser are unchanged. */
+       16-byte stored record and the PC-side parser are unchanged.
+       A channel whose conversion fails is never written and stays zero, so
+       TuneGain() reports it as OPTIC_FAIL on that channel. */
     for (bIdx = 0u; bIdx < (uint8_t)APP_EXEC_MEASURE_INITIAL_WORDS; bIdx++)
     {
         s_meas.awInitial[bIdx] = 0u;
     }
 
     s_meas.tJob    = MEAS_JOB_INITIAL;
-    s_meas.tPhase  = MEAS_PHASE_CHECK;
     s_meas.tResult = APP_EXEC_MEASURE_RUNNING;
     s_meas.bCh     = 0u;
-    s_meas.bScaled = 0u;      /* the sweep gate judges on the raw axis */
 
-    return s_StartOptic(OPTIC_CH_C);
+    return s_StartOptic((Optic_Ch)0u);
 }
 
-Ret_t APP_EXEC_Measure_StartStickCheck(uint8_t bScaled)
+Ret_t APP_EXEC_Measure_StartStickCheck(void)
 {
     if (s_meas.tJob != MEAS_JOB_NONE)
     {
@@ -144,7 +121,6 @@ Ret_t APP_EXEC_Measure_StartStickCheck(uint8_t bScaled)
 
     s_meas.tJob    = MEAS_JOB_STICK;
     s_meas.tResult = APP_EXEC_MEASURE_RUNNING;
-    s_meas.bScaled = (bScaled != 0u) ? 1u : 0u;
 
     return s_StartOptic(OPTIC_CH_C);
 }
@@ -202,42 +178,20 @@ Ret_t APP_EXEC_Measure_Process(void)
             break;
 
         case MEAS_JOB_INITIAL:
-            if (s_meas.tPhase == MEAS_PHASE_CHECK)
-            {
-                s_JudgeStick();
-                if (s_meas.bPresent == 0u)
-                {
-                    /* Pulled out mid-sweep: no partial set is kept. */
-                    s_meas.tJob    = MEAS_JOB_NONE;
-                    s_meas.tResult = APP_EXEC_MEASURE_FAILED;
-                    break;
-                }
-                s_meas.tPhase = MEAS_PHASE_CHANNEL;
-                (void)s_StartOptic((Optic_Ch)s_meas.bCh);
-            }
-            else if (s_meas.tPhase == MEAS_PHASE_CHANNEL)
-            {
-                s_meas.awInitial[s_meas.bCh] = Optic_GetRaw((Optic_Ch)s_meas.bCh);
-                s_meas.bCh++;
+            /* Each channel once (hs.kim review D2). The presence checks the
+               old FW interleaved are gone: a stick pulled out during these
+               ~0.1 s reads dark and fails the acceptance window instead. */
+            s_meas.awInitial[s_meas.bCh] = Optic_GetRaw((Optic_Ch)s_meas.bCh);
+            s_meas.bCh++;
 
-                if (s_meas.bCh < MEAS_CH_USED)
-                {
-                    s_meas.tPhase = MEAS_PHASE_CHECK;
-                }
-                else
-                {
-                    s_meas.tPhase = MEAS_PHASE_FINAL;
-                }
-                (void)s_StartOptic(OPTIC_CH_C);
+            if (s_meas.bCh < MEAS_CH_USED)
+            {
+                (void)s_StartOptic((Optic_Ch)s_meas.bCh);
             }
             else
             {
-                /* Closing check: only now is the set considered complete. */
-                s_JudgeStick();
                 s_meas.tJob    = MEAS_JOB_NONE;
-                s_meas.tResult = (s_meas.bPresent != 0u)
-                                 ? APP_EXEC_MEASURE_DONE
-                                 : APP_EXEC_MEASURE_FAILED;
+                s_meas.tResult = APP_EXEC_MEASURE_DONE;
             }
             break;
 
@@ -342,11 +296,6 @@ uint8_t APP_EXEC_Measure_IsBusy(void)
 uint8_t APP_EXEC_Measure_IsStickPresent(void)
 {
     return s_meas.bPresent;
-}
-
-uint16_t APP_EXEC_Measure_GetStickValue(void)
-{
-    return s_meas.wStickValue;
 }
 
 const uint16_t *APP_EXEC_Measure_GetInitial(void)

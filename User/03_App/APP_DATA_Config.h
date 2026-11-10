@@ -38,9 +38,9 @@
 /* Optical thresholds --------------------------------------------------------*/
 /* Stick present / absent, judged on the gain-applied axis (supervisor,
    2026-10-14: "a value without gain is not even worth considering").
-   556 was fixed on 2026-10-29 from five healthy units reading 3,541..3,714,
-   which leaves at least 941 counts of margin on the raw axis. */
-#define APP_OPTIC_STICK_THRESHOLD_RAW     2600u   /* old OPTIC_STICK_REMOVE_THRESHOLD        */
+   556 was fixed on 2026-10-29 from five healthy units reading 3,541..3,714.
+   The raw-axis 2600 gate was removed on 2026-11-10: the wake check is the
+   stick switch now (hs.kim review D1/M11). */
 #define APP_OPTIC_STICK_THRESHOLD_SCALED   556u   /* old OPTIC_STICK_REMOVE_THRESHOLD_SCALED */
 
 /* Wake-up switch check (hs.kim review 2026-11-09, D1/M14). After a wake the

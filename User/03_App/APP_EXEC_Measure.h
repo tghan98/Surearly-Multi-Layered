@@ -7,22 +7,19 @@
   * the test sequence needs: the initial four-channel sweep, gain tuning, and
   * the stick-present judgement.
   *
-  * The initial sweep interleaves presence checks, exactly as the old FW did:
-  *   check - CH0 - check - CH1 - check - CH2 - check - CH3 - check
-  * Nine measurements. A stick pulled out part way through aborts the sweep,
-  * so a stored record is always a complete set.
+  * The initial sweep reads each channel once: CH0 - CH1 - CH2 - CH3
+  * (hs.kim review D2, 2026-11-10). The presence checks the old FW put between
+  * them are gone; a stick pulled out during the sweep reads dark and fails
+  * the acceptance window in TuneGain().
   *
   * Stick judgement lives here, not in the Optic module and not in the control
   * layer. The thresholds are specification values from APP_DATA_Config.h, and
   * both the control layer and this layer need the judgement - putting it in
   * the control layer would force a call upward (decided 2026-11-03).
   *
-  * Two axes, as in the old FW:
-  *   raw    - the initial sweep, threshold APP_OPTIC_STICK_THRESHOLD_RAW
-  *            (the wake check moved to the switch on 2026-11-10)
-  *   scaled - the waiting loop, threshold APP_OPTIC_STICK_THRESHOLD_SCALED
-  * The supervisor's instruction of 2026-10-14 was that the judgement that
-  * matters is the one on the gain-applied axis.
+  * One axis: gain-applied, threshold APP_OPTIC_STICK_THRESHOLD_SCALED
+  * (supervisor, 2026-10-14). The raw-axis gate is gone since the wake check
+  * moved to the stick switch (2026-11-10).
   *
   * Differences from the old FW (DM_App_Optic_*):
   *   The old routines blocked: one sweep held the main loop for about 280 ms.
@@ -64,19 +61,18 @@ typedef enum
 Ret_t APP_EXEC_Measure_Init(void);
 
 /**
-  * @brief  Starts the nine-measurement initial sweep.
+  * @brief  Starts the initial sweep, one reading per channel.
   * @note   Layer: App (exec). Blocking: no. ISR: no.
   * @retval RET_OK, RET_BUSY
   */
 Ret_t APP_EXEC_Measure_StartInitial(void);
 
 /**
-  * @brief  Starts one presence check on the C channel.
-  * @param  bScaled : 1 to judge on the gain-applied axis, 0 on the raw axis
+  * @brief  Starts one presence check on the C channel, gain-applied axis.
   * @note   Layer: App (exec). Blocking: no. ISR: no.
   * @retval RET_OK, RET_BUSY
   */
-Ret_t APP_EXEC_Measure_StartStickCheck(uint8_t bScaled);
+Ret_t APP_EXEC_Measure_StartStickCheck(void);
 
 /**
   * @brief  Starts one measurement on one channel.
@@ -138,13 +134,6 @@ uint8_t APP_EXEC_Measure_IsBusy(void);
   * @retval 1 present, 0 absent
   */
 uint8_t APP_EXEC_Measure_IsStickPresent(void);
-
-/**
-  * @brief  Reading that the last presence check judged on.
-  * @note   Layer: App (exec). Blocking: no. ISR: no.
-  * @retval ADC counts on whichever axis was asked for
-  */
-uint16_t APP_EXEC_Measure_GetStickValue(void);
 
 /**
   * @brief  Pointer to the four raw initial readings plus four zero words.
