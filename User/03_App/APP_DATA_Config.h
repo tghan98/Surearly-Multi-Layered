@@ -84,21 +84,20 @@
                                              - APP_OVER_SAMPLE_CHECK_TK \
                                              - APP_LOW_SAMPLE_CHECK_TK))
 
-/* How often the stick is re-checked while waiting.
-   The old FW declared OPTIC_STICK_CHECK_INTERVAL_MS as 250, but the counter
-   behind it was advanced from a caller that itself ran only every 250 ms, so
-   the interval that actually shipped was 6.25 s - 25 times longer than the
-   name says. Two throttles in series on the same path.
+/* How often the stick is re-checked for removal.
+   The old FW declared 250 ms, but two throttles in series made the interval
+   that shipped 6.25 s, and the port first kept that (2026-11-03). In
+   production a pulled stick then took over 6 s to notice, and which error
+   showed depended on the moment it was pulled (2026-11-06).
+   Now a check of its own every 500 ms, from the end of gain tuning to the
+   start of the result scan (hs.kim review D6, 2026-11-10). 250 ms would
+   react sooner but fires the LED twice as often; 500 ms is the agreed
+   floor. */
+#define APP_STICK_CHECK_INTERVAL_TK  HW_TICK_MS(500u)
 
-   This port keeps the SHIPPED behaviour, not the declared intent: changing
-   it would make the LED fire 25 times more often, which moves both the
-   current draw and the optical behaviour. A bench comparison against the old
-   firmware could then not tell a restructuring difference from this one.
-
-   Fix it after the port is confirmed against the old readings, as its own
-   change with its own test. (decided 2026-11-03) */
-#define APP_STICK_CHECK_INTERVAL_TK  HW_TICK_MS(6250uL) /* shipped behaviour       */
-#define APP_STICK_CHECK_INTENDED_TK  HW_TICK_MS( 250u)  /* declared intent, unused */
+/* Pace of the waiting loops: one legacy "sleep" of 250 ms. The sample-load
+   wait takes one T/BT pair every four of them, as the old FW did. */
+#define APP_SEQ_SLEEP_TK             HW_TICK_MS(250u)
 
 #endif /* __APP_DATA_CONFIG_H__ */
 /*****************************END OF FILE****/

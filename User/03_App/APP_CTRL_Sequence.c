@@ -134,7 +134,8 @@ static void s_ClearRun(void);
 static void s_StepIdle(void);
 static void s_StepStickInsert(void);
 static uint16_t s_Ratio(uint16_t wValue, uint16_t wPercent);
-static uint8_t s_SleepAndCheckStick(APP_DATA_ErrorCode tError);
+static uint8_t s_Sleep(void);
+static void s_RemoveCheck(void);
 static Ret_t s_SaveResult(void);
 static void s_SequenceError(APP_DATA_ErrorCode tError);
 static void s_StepSampleLoadWait(void);
@@ -194,6 +195,7 @@ static void s_ClearRun(void)
 
     s_seq.tError     = APP_ERR_NONE;
     s_seq.bErrorStep = 0u;
+    s_seq.bChecking  = 0u;
 
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
@@ -349,6 +351,12 @@ static void s_StepStickInsert(void)
                too. */
             (void)Lcd_PlayAnim(s_animStickInsert,
                                (uint8_t)SEQ_ANIM_INSERT_STEPS, 0u);
+
+            /* Gains are set: the removal check can judge from here on, and
+               its first check is due at once (review D6). */
+            s_seq.wStickStart = (uint16_t)(HW_Tick_Get()
+                                           - APP_STICK_CHECK_INTERVAL_TK);
+            s_seq.bChecking   = 0u;
             s_seq.tPhase = SEQ_PH_ANIM;
             break;
 
@@ -388,42 +396,79 @@ static void s_SequenceError(APP_DATA_ErrorCode tError)
     s_EnterError(tError);
 }
 
-/* One legacy 250 ms sleep, with the shipped 6250 ms optical recheck.
-   A pending check must finish before its caller advances the wait phase. */
-static uint8_t s_SleepAndCheckStick(APP_DATA_ErrorCode tError)
+/* One legacy 250 ms sleep. Only paces the waiting loops; the stick is
+   checked by s_RemoveCheck(), on its own clock (review D6, M5/M6). */
+static uint8_t s_Sleep(void)
 {
+    if (HW_Tick_Elapsed(s_seq.wSleepStart) < APP_SEQ_SLEEP_TK)
+    {
+        return 0u;
+    }
+    s_seq.wSleepStart = HW_Tick_Get();
+    return 1u;
+}
+
+/* Stick removal check, every 500 ms, run ahead of the step on every pass.
+   It is separate from the steps so that neither a running animation nor a
+   step's own timing can delay it (hs.kim, 2026-11-10):
+     STICK_INSERT animation, SAMPLE_LOAD_WAIT -> STICK_REMOVE (BOOK + DROP)
+     OVER/LOW_SAMPLE_CHECK, REACTION_WAIT     -> STICK_FAIL   (BOOK)
+   A new check starts only while the step is in its WAIT (or animation)
+   phase, never while the step measures a channel itself (review D7), so the
+   two never compete for the optics. The result is taken on the first pass
+   after the check finishes, before the step can start anything new. */
+static void s_RemoveCheck(void)
+{
+    uint8_t            bActive;
+    APP_DATA_ErrorCode tErr = APP_ERR_STICK_FAIL;
+
+    switch (s_seq.tStep)
+    {
+        case APP_SEQ_STICK_INSERT:
+            bActive = (s_seq.tPhase == SEQ_PH_ANIM) ? 1u : 0u;
+            tErr    = APP_ERR_STICK_REMOVE;
+            break;
+
+        case APP_SEQ_SAMPLE_LOAD_WAIT:
+            bActive = (s_seq.tPhase == SEQ_PH_WAIT) ? 1u : 0u;
+            tErr    = APP_ERR_STICK_REMOVE;
+            break;
+
+        case APP_SEQ_OVER_SAMPLE_CHECK:
+        case APP_SEQ_LOW_SAMPLE_CHECK:
+        case APP_SEQ_REACTION_WAIT:
+            bActive = (s_seq.tPhase == SEQ_PH_WAIT) ? 1u : 0u;
+            break;
+
+        default:
+            bActive = 0u;
+            break;
+    }
+
     if (s_seq.bChecking != 0u)
     {
         if (APP_EXEC_Measure_IsBusy() != 0u)
         {
-            return 0u;
+            return;
         }
         s_seq.bChecking = 0u;
-        if (APP_EXEC_Measure_IsStickPresent() == 0u)
+        if ((bActive != 0u) && (APP_EXEC_Measure_IsStickPresent() == 0u))
         {
-            s_SequenceError(tError);
-            return 0u;
+            s_SequenceError(tErr);
         }
+        return;
     }
-    else
+
+    if ((bActive == 0u)
+        || (HW_Tick_Elapsed(s_seq.wStickStart) < APP_STICK_CHECK_INTERVAL_TK))
     {
-        if (HW_Tick_Elapsed(s_seq.wSleepStart)
-            < APP_STICK_CHECK_INTENDED_TK)
-        {
-            return 0u;
-        }
-        if (HW_Tick_Elapsed(s_seq.wStickStart) >= APP_STICK_CHECK_INTERVAL_TK)
-        {
-            if (APP_EXEC_Measure_StartStickCheck() == RET_OK)
-            {
-                s_seq.wStickStart = HW_Tick_Get();
-                s_seq.bChecking = 1u;
-            }
-            return 0u;
-        }
+        return;
     }
-    s_seq.wSleepStart = HW_Tick_Get();
-    return 1u;
+    if (APP_EXEC_Measure_StartStickCheck() == RET_OK)
+    {
+        s_seq.wStickStart = HW_Tick_Get();
+        s_seq.bChecking   = 1u;
+    }
 }
 
 static Ret_t s_SaveResult(void)
@@ -471,15 +516,12 @@ static void s_StepSampleLoadWait(void)
                 APP_EMPTY_BTB_RATIO);
             s_seq.wStart = HW_Tick_Get();
             s_seq.wSleepStart = s_seq.wStart;
-            /* The old cached-status reset forces the first recheck. */
-            s_seq.wStickStart = (uint16_t)(s_seq.wStart - APP_STICK_CHECK_INTERVAL_TK);
-            s_seq.bChecking = 0u;
             s_seq.bSleeps = 0u;
             s_seq.tPhase = SEQ_PH_WAIT;
             break;
 
         case SEQ_PH_WAIT:
-            if (s_SleepAndCheckStick(APP_ERR_STICK_REMOVE) == 0u)
+            if (s_Sleep() == 0u)
             {
                 break;
             }
@@ -583,7 +625,7 @@ static void s_SampleCheck(uint16_t wWait, uint16_t wBase, uint16_t wRatio,
             break;
 
         case SEQ_PH_WAIT:
-            if ((s_SleepAndCheckStick(APP_ERR_STICK_FAIL) != 0u)
+            if ((s_Sleep() != 0u)
                 && (HW_Tick_Elapsed(s_seq.wStart) >= wWait))
             {
                 s_seq.tPhase = SEQ_PH_START_CHANNEL;
@@ -660,7 +702,7 @@ static void s_StepReactionWait(void)
         s_seq.wSleepStart = s_seq.wStart;
         s_seq.tPhase = SEQ_PH_WAIT;
     }
-    else if ((s_SleepAndCheckStick(APP_ERR_STICK_FAIL) != 0u)
+    else if ((s_Sleep() != 0u)
              && (HW_Tick_Elapsed(s_seq.wStart) >= APP_REACTION_WAIT_TK))
     {
         s_GoStep(APP_SEQ_RESULT_SCAN);
@@ -789,6 +831,8 @@ Ret_t APP_CTRL_Sequence_Init(void)
 
 Ret_t APP_CTRL_Sequence_Process(void)
 {
+    s_RemoveCheck();
+
     switch (s_seq.tStep)
     {
         case APP_SEQ_IDLE:
