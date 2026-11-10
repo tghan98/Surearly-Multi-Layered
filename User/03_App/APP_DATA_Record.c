@@ -242,31 +242,6 @@ Ret_t APP_DATA_Record_SaveResult(const uint16_t *p_wData)
     return RET_OK;
 }
 
-Ret_t APP_DATA_Record_UpdateWakeFail(uint16_t wAdc)
-{
-    uint16_t wMin = 0u;
-    uint16_t wMax = 0u;
-
-    (void)APP_DATA_Record_GetWakeFail(&wMin, &wMax);
-
-    /* Written straight through: these only move on a wake-gate failure, and
-       the value is not held anywhere else. */
-    if (wAdc < wMin)
-    {
-        (void)Eeprom_Write(REC_OFF_WAKE_FAIL_MIN, (const uint8_t *)&wAdc, 2u);
-    }
-    else if (wAdc > wMax)
-    {
-        (void)Eeprom_Write(REC_OFF_WAKE_FAIL_MAX, (const uint8_t *)&wAdc, 2u);
-    }
-    else
-    {
-        /* inside the stored range */
-    }
-
-    return RET_OK;
-}
-
 uint8_t APP_DATA_Record_GetInsertCount(void)
 {
     return s_rec.abStatus[REC_OFF_INSERT_COUNT];

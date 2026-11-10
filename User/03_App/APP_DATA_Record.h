@@ -17,8 +17,8 @@
   *   20   result records             192 B   (6 slots x 32 B)
   *   212  QC reference                 8 B   (4 words)
   *   244  newest result slot           1 B
-  *   248  wake-gate fail minimum       2 B
-  *   250  wake-gate fail maximum       2 B
+  *   248  wake-gate fail minimum       2 B   (no longer written, 2026-11-10)
+  *   250  wake-gate fail maximum       2 B   (no longer written, 2026-11-10)
   *   252  reserved                     4 B
   *
   * A byte that has never been written reads as 0xFF. The status accessors
@@ -112,14 +112,6 @@ Ret_t APP_DATA_Record_SetStickPtr(const uint16_t *p_wData);
   */
 Ret_t APP_DATA_Record_SaveResult(const uint16_t *p_wData);
 
-/**
-  * @brief  Widens the stored wake-gate fail range if this reading is outside.
-  * @param  wAdc : raw reading that failed the wake gate
-  * @note   Layer: App (data). Blocking: no. ISR: no.
-  * @retval RET_OK
-  */
-Ret_t APP_DATA_Record_UpdateWakeFail(uint16_t wAdc);
-
 /* Getters (cannot fail) -----------------------------------------------------*/
 /**
   * @brief  Stick insert count.
@@ -168,7 +160,9 @@ Ret_t APP_DATA_Record_GetQcRef(const uint16_t **p_wData);
 Ret_t APP_DATA_Record_GetStatus(uint16_t *p_wOut);
 
 /**
-  * @brief  Stored wake-gate fail range.
+  * @brief  Stored wake-gate fail range. Nothing writes it since the optical
+  *         wake gate was replaced by the switch check (2026-11-10); kept so
+  *         the dump format and the PC parser stay unchanged.
   * @param  p_wMin : out, must not be NULL
   * @param  p_wMax : out, must not be NULL
   * @note   Layer: App (data). Blocking: no. ISR: no.

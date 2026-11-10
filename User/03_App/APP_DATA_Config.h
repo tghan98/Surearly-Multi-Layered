@@ -43,6 +43,14 @@
 #define APP_OPTIC_STICK_THRESHOLD_RAW     2600u   /* old OPTIC_STICK_REMOVE_THRESHOLD        */
 #define APP_OPTIC_STICK_THRESHOLD_SCALED   556u   /* old OPTIC_STICK_REMOVE_THRESHOLD_SCALED */
 
+/* Wake-up switch check (hs.kim review 2026-11-09, D1/M14). After a wake the
+   stick switch PB1 is read every 10 ms, 10 times; the stick counts as
+   inserted when at least 8 reads are low. Anything less is a bounce or a
+   noise pulse, and the unit goes back to halt without showing anything. */
+#define APP_WAKE_SW_INTERVAL_MS            10u
+#define APP_WAKE_SW_SAMPLES                10u
+#define APP_WAKE_SW_PASS                    8u
+
 /* Acceptance window for the initial per-channel reading at full LED drive. */
 #define APP_OPTIC_INITIAL_MIN            1500u   /* old OPTIC_INITIAL_MIN_100 */
 #define APP_OPTIC_INITIAL_MAX            3900u   /* old OPTIC_INITIAL_MAX_100 */

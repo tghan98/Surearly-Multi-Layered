@@ -29,16 +29,17 @@
 #define SEQ_QC_CYCLE_LIMIT       5u
 #define SEQ_INSERT_COUNT_CAP   254u
 
-/* One tick of settling after the clock comes back, as the old FW did. */
-#define SEQ_RESUME_SETTLE_TK     HW_TICK_WAIT_MS(10u)
+/* Wake-up switch check: one read per interval. A period, not a floor - the
+   first read may come less than 10 ms after the wake, which the 8-of-10
+   rule absorbs. */
+#define SEQ_WAKE_SW_TK           HW_TICK_MS(APP_WAKE_SW_INTERVAL_MS)
 
 /* Private types -------------------------------------------------------------*/
 typedef enum
 {
     SEQ_PH_ENTER = 0,      /* first pass in this step  */
     SEQ_PH_WAIT,           /* waiting on time or a job */
-    SEQ_PH_SETTLE,
-    SEQ_PH_GATE,
+    SEQ_PH_SWITCH,         /* wake-up switch check, 10 reads */
     SEQ_PH_START_CHANNEL,
     SEQ_PH_CHANNEL,
     SEQ_PH_SAVE,
@@ -74,6 +75,8 @@ typedef struct
     uint8_t                bChecking;
     uint8_t                bChannel;
     uint8_t                bSleeps;
+    uint8_t                bSwReads;     /* switch reads taken after wake  */
+    uint8_t                bSwLow;       /* of those, reads that were low  */
 } Seq_Ctx;
 
 /* Private variables ---------------------------------------------------------*/
@@ -231,14 +234,13 @@ static void s_ClearRun(void)
 }
 
 /* ---- Step 1: IDLE --------------------------------------------------------*/
-/* Deep sleep and the wake-up gate. The order of the shutdown matters: the
+/* Deep sleep and the wake-up switch check. The order of the shutdown matters: the
    measured 71 uA (unit 12, PPK2, 2026-10-30) depends on the LEDs being off,
    the display parked, the regulator in ultra-low-power mode and all three
    peripheral clocks gated before halt() is reached. */
 static void s_StepIdle(void)
 {
-    uint8_t  bInsertCount;
-    uint16_t wGateAdc;
+    uint8_t bInsertCount;
 
     switch (s_seq.tPhase)
     {
@@ -257,58 +259,52 @@ static void s_StepIdle(void)
             (void)Lcd_Init();
             (void)PcComm_Init();
 
-            s_seq.wStart = HW_Tick_Get();
-            s_seq.tPhase  = SEQ_PH_SETTLE;
+            s_seq.bSwReads = 0u;
+            s_seq.bSwLow   = 0u;
+            s_seq.wStart   = HW_Tick_Get();
+            s_seq.tPhase   = SEQ_PH_SWITCH;
             break;
 
-        case SEQ_PH_SETTLE:
-            /* Let the clock and the ADC settle before the gate measurement,
-               as the old FW did with one sleep tick after Power_Resume(). */
-            if (HW_Tick_Elapsed(s_seq.wStart) >= SEQ_RESUME_SETTLE_TK)
+        case SEQ_PH_SWITCH:
+            /* Is the stick really in? The switch is what woke the unit, so
+               it is what is asked: 10 reads, 10 ms apart, at least 8 low
+               (hs.kim review D1). This replaces the optical gate on raw
+               C >= 2600, which turned some good insertions away (unit
+               152510, 2026-11-06). The optics are not touched here. */
+            if (HW_Tick_Elapsed(s_seq.wStart) < SEQ_WAKE_SW_TK)
             {
-                s_ClearRun();
-                (void)APP_EXEC_Measure_StartStickCheck(0u);  /* raw axis */
-                s_seq.tPhase = SEQ_PH_GATE;
+                break;
             }
-            break;
+            s_seq.wStart = HW_Tick_Get();
 
-        case SEQ_PH_GATE:
-            if (APP_EXEC_Measure_IsBusy() != 0u)
+            if (HW_GPIO_Read(HW_GPIO_STICK_SW) == HW_GPIO_LEVEL_LOW)
+            {
+                s_seq.bSwLow++;
+            }
+            s_seq.bSwReads++;
+            if (s_seq.bSwReads < (uint8_t)APP_WAKE_SW_SAMPLES)
             {
                 break;
             }
 
-            wGateAdc     = APP_EXEC_Measure_GetStickValue();
+            if (s_seq.bSwLow < (uint8_t)APP_WAKE_SW_PASS)
+            {
+                /* Bounce or noise: back to sleep, nothing shown, nothing
+                   counted. */
+                s_GoStep(APP_SEQ_IDLE);
+                break;
+            }
+
             bInsertCount = APP_DATA_Record_GetInsertCount();
-
-            if (APP_EXEC_Measure_IsStickPresent() != 0u)
+            if (bInsertCount < (uint8_t)SEQ_INSERT_COUNT_CAP)
             {
-                if (bInsertCount < (uint8_t)SEQ_INSERT_COUNT_CAP)
-                {
-                    bInsertCount++;
-                    (void)APP_DATA_Record_SetInsertCount(bInsertCount);
-                }
-                s_seq.bQcCycle = (bInsertCount <= (uint8_t)SEQ_QC_CYCLE_LIMIT)
-                                 ? 1u : 0u;
-                s_GoStep(APP_SEQ_STICK_INSERT);
+                bInsertCount++;
+                (void)APP_DATA_Record_SetInsertCount(bInsertCount);
             }
-            else
-            {
-                /* Keep the reading that failed the gate: it is the only record
-                   of a unit that woke mechanically but saw nothing. */
-                (void)APP_DATA_Record_UpdateWakeFail(wGateAdc);
-                s_seq.bQcCycle = (bInsertCount < (uint8_t)SEQ_QC_CYCLE_LIMIT)
-                                 ? 1u : 0u;
-
-                if (s_seq.bQcCycle != 0u)
-                {
-                    s_EnterError(APP_ERR_STICK_FAIL);
-                }
-                else
-                {
-                    s_GoStep(APP_SEQ_IDLE);
-                }
-            }
+            s_seq.bQcCycle = (bInsertCount <= (uint8_t)SEQ_QC_CYCLE_LIMIT)
+                             ? 1u : 0u;
+            s_ClearRun();
+            s_GoStep(APP_SEQ_STICK_INSERT);
             break;
 
         default:
@@ -793,14 +789,12 @@ static void s_StepErrorWait(void)
 {
     if (s_seq.tPhase == SEQ_PH_ENTER)
     {
-        /* IDLE gate failures have only the wake-fail record, no result slot. */
-        if (s_seq.bErrorStep != (uint8_t)APP_SEQ_IDLE)
+        /* Every error reaching here has a step past IDLE: since the switch
+           check (2026-11-10) a failed wake goes back to sleep unshown. */
+        (void)APP_DATA_Record_SetError(s_seq.bErrorStep, (uint8_t)s_seq.tError);
+        if (s_SaveResult() != RET_OK)
         {
-            (void)APP_DATA_Record_SetError(s_seq.bErrorStep, (uint8_t)s_seq.tError);
-            if (s_SaveResult() != RET_OK)
-            {
-                return;
-            }
+            return;
         }
         s_seq.wStart = HW_Tick_Get();
         s_seq.tPhase = SEQ_PH_WAIT;

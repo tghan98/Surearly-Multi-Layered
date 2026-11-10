@@ -18,7 +18,8 @@
   * the control layer would force a call upward (decided 2026-11-03).
   *
   * Two axes, as in the old FW:
-  *   raw    - the initial gate, threshold APP_OPTIC_STICK_THRESHOLD_RAW
+  *   raw    - the initial sweep, threshold APP_OPTIC_STICK_THRESHOLD_RAW
+  *            (the wake check moved to the switch on 2026-11-10)
   *   scaled - the waiting loop, threshold APP_OPTIC_STICK_THRESHOLD_SCALED
   * The supervisor's instruction of 2026-10-14 was that the judgement that
   * matters is the one on the gain-applied axis.

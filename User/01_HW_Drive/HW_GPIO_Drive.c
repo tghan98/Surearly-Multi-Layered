@@ -18,6 +18,13 @@ typedef struct
     GPIO_Mode_TypeDef tMode;
 } HW_GPIO_Map;
 
+/* Private defines -----------------------------------------------------------*/
+/* Bit 7 of the mode code is set for every output mode and clear for every
+   input mode (stm8l15x_gpio.h). Testing one mode value is not enough: the
+   stick switch moved from pull-up to floating input on 2026-11-10 and an
+   equality test against In_PU would have read it through the output latch. */
+#define HW_GPIO_IS_INPUT(mode)   (((uint8_t)(mode) & 0x80u) == 0u)
+
 /* Private variables ---------------------------------------------------------*/
 /* Logical ID -> port, pin, reset-safe mode. The only place pin numbers live. */
 static const HW_GPIO_Map s_map[HW_GPIO_COUNT] =
@@ -54,7 +61,7 @@ Ret_t HW_GPIO_Write(HW_GPIO_Id tId, uint8_t bLevel)
     {
         return RET_ERR_PARAM;
     }
-    if (s_map[tId].tMode == GPIO_Mode_In_PU_No_IT)
+    if (HW_GPIO_IS_INPUT(s_map[tId].tMode))
     {
         return RET_ERR_STATE;
     }
@@ -80,7 +87,7 @@ uint8_t HW_GPIO_Read(HW_GPIO_Id tId)
         return HW_GPIO_LEVEL_LOW;
     }
 
-    if (s_map[tId].tMode == GPIO_Mode_In_PU_No_IT)
+    if (HW_GPIO_IS_INPUT(s_map[tId].tMode))
     {
         tBit = GPIO_ReadInputDataBit(s_map[tId].p_Port, s_map[tId].tPin);
     }
