@@ -1,0 +1,25 @@
+﻿필드,Firmware Ver.,Real Firmware Ver.,LOT. Upper,LOT. Lower
+데이터(String),v2.1,v2.1.1.2,HCGM,19001
+
+필드,Insert Count,Test Complete Count
+데이터(Value),6,0
+
+필드,T,BT,BC,C
+데이터(Value),2480,3597,3172,2251
+
+필드,QC T,QC BT,QC BC,QC C
+기준값(Value),2481,3581,3168,2259
+
+필드,Wake Fail Min,Wake Fail Max
+데이터(Value),0,10496
+
+필드,적용 컷오프 T,적용 컷오프 C
+기기값(Value),1080,1005
+
+필드,Gain CH1,Gain CH2,Gain CH3,Gain CH4,ET,EBT,EBC,EC,RT,RBT,RBC,RC,T Intensity,C Intensity,Yes(1)/No(0),Error Step,Error Code
+1,48,34,38,53,1190,1217,1203,1197,0,0,0,0,0,0,0,2,ERROR STICK REMOVE
+2,48,33,37,52,1192,1185,1184,1189,0,0,0,0,0,0,0,2,ERROR STICK REMOVE
+3,49,33,37,53,1210,1190,1192,1203,0,0,0,0,0,0,0,2,ERROR STICK REMOVE
+4,48,33,37,52,1195,1188,1185,1197,0,0,0,0,0,0,0,2,ERROR STICK REMOVE
+5,32,40,32,33,1193,1196,1209,1215,1191,1499,1204,1142,0,0,0,5,ERROR STICK FAIL
+6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,ERROR NONE

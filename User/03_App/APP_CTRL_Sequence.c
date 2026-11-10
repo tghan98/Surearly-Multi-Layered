@@ -304,7 +304,8 @@ static void s_StepIdle(void)
    FW did (hs.kim, 2026-11-10). Every failure here is shown: the old rule of
    showing it only on the first five insertions and otherwise going quietly
    to sleep left a unit that seemed dead (review D4). Done in this step, not
-   in IDLE, so Error Step 2 in a dump keeps meaning "initial optics". */
+   in IDLE, so Error Step 1 in a dump keeps meaning "initial optics"
+   (the step number is the 0-based APP_CTRL_Sequence_Step). */
 static void s_StepStickInsert(void)
 {
     APP_DATA_ErrorCode tErr;
