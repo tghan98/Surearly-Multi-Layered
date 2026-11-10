@@ -579,7 +579,22 @@ static void s_StepSampleLoadWait(void)
             s_seq.bChannel++;
             if (s_seq.bChannel == (uint8_t)OPTIC_CH_COUNT)
             {
-                s_GoStep(APP_SEQ_OVER_SAMPLE_CHECK);
+                /* "Sample arrived" is a drop in T against BT, and a stick
+                   pulled out darkens both, which can pass for the same drop
+                   (bench dumps 2026-11-06, defect 1). The C reading taken
+                   just now settles it: a stick still in reads C >= 556 even
+                   wet (wettest finished runs 743..1143), a pulled one does
+                   not. Without this the run went on to the volume checks and
+                   ended as STICK_FAIL (BOOK only) instead of STICK_REMOVE. */
+                if (s_seq.awScaled[OPTIC_CH_C]
+                    < (uint16_t)APP_OPTIC_STICK_THRESHOLD_SCALED)
+                {
+                    s_SequenceError(APP_ERR_STICK_REMOVE);
+                }
+                else
+                {
+                    s_GoStep(APP_SEQ_OVER_SAMPLE_CHECK);
+                }
             }
             else
             {
