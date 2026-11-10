@@ -29,7 +29,10 @@ static const HW_GPIO_Map s_map[HW_GPIO_COUNT] =
     [HW_GPIO_LCD_SEG_NO]   = { GPIOC, GPIO_Pin_6, GPIO_Mode_Out_PP_Low_Slow  },
     [HW_GPIO_LCD_SEG_YES]  = { GPIOD, GPIO_Pin_0, GPIO_Mode_Out_PP_Low_Slow  },
     [HW_GPIO_LCD_SEG_DROP] = { GPIOC, GPIO_Pin_4, GPIO_Mode_Out_PP_Low_Slow  },
-    [HW_GPIO_STICK_SW]     = { GPIOB, GPIO_Pin_1, GPIO_Mode_In_PU_No_IT      }
+    [HW_GPIO_STICK_SW]     = { GPIOB, GPIO_Pin_1, GPIO_Mode_In_FL_No_IT      },
+    [HW_GPIO_NC_PB0]       = { GPIOB, GPIO_Pin_0, GPIO_Mode_Out_PP_Low_Slow  },
+    [HW_GPIO_NC_PC0]       = { GPIOC, GPIO_Pin_0, GPIO_Mode_Out_PP_Low_Slow  },
+    [HW_GPIO_NC_PC1]       = { GPIOC, GPIO_Pin_1, GPIO_Mode_Out_PP_Low_Slow  }
 };
 
 /* Functions -----------------------------------------------------------------*/

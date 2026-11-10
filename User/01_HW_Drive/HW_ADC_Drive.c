@@ -35,6 +35,16 @@ Ret_t HW_ADC_Init(void)
     ADC_SamplingTimeConfig(ADC1, ADC_Group_SlowChannels,
                            ADC_SamplingTime_384Cycles);
 
+    /* Schmitt triggers off on the three sensor inputs, as the old FW did
+       (alpha.2 BSP_HW_Config.c): an analog level near the threshold keeps
+       the digital input buffer switching and drawing current.
+       A set TRIGR bit disables the trigger. All three channels sit in
+       TRIGR[2] (high byte of the channel code), so one write covers them -
+       ADC_SchmittTriggerConfig() would pull in a generic decoder for this. */
+    ADC1->TRIGR[(uint8_t)((uint16_t)ADC_Channel_11 >> 8)] |=
+        (uint8_t)((uint8_t)ADC_Channel_11 | (uint8_t)ADC_Channel_12
+                  | (uint8_t)ADC_Channel_13);
+
     ADC_Cmd(ADC1, DISABLE);
     CLK_PeripheralClockConfig(CLK_Peripheral_ADC1, DISABLE);
     s_bEnabled = 0u;

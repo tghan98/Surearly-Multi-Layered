@@ -9,7 +9,11 @@
   *     The schematic draws the drop segment on PB0; the built boards use PC4.
   *     Confirmed on 13 recovered units - every unit whose display worked was
   *     PC4 (2026-10-15).
-  *   STICK_SW PB1 - stick switch, pulled up, closes to ground.
+  *   STICK_SW PB1 - stick switch, closes to ground. The board has its own
+  *     100 kohm pull-up, so the MCU pull-up stays off: both in parallel only
+  *     waste current while a stick holds the switch closed (hs.kim, 2026-11-09).
+  *   Not connected: PB0, PC0, PC1 - driven low so they never float.
+  *     PC0/PC1 are true open-drain pins on this MCU; low is all they can drive.
   *
   * Responsibility boundary: physical levels only. This driver does not know
   * that low means "LED on" - a Module converts the active-low meaning
@@ -41,6 +45,9 @@ typedef enum
     HW_GPIO_LCD_SEG_YES,     /* PD0 */
     HW_GPIO_LCD_SEG_DROP,    /* PC4, see the file header */
     HW_GPIO_STICK_SW,        /* PB1, input */
+    HW_GPIO_NC_PB0,          /* not connected, held low */
+    HW_GPIO_NC_PC0,          /* not connected, held low */
+    HW_GPIO_NC_PC1,          /* not connected, held low */
     HW_GPIO_COUNT
 } HW_GPIO_Id;
 
@@ -52,7 +59,8 @@ typedef enum
 /**
   * @brief  Puts every pin in this table into its reset-safe state.
   * @note   Layer: HW Driver. Blocking: no. ISR: no.
-  *         Outputs start low, the stick switch starts as a pulled-up input.
+  *         Outputs start low, the stick switch starts as a floating input
+  *         (the board pulls it up).
   * @retval RET_OK
   */
 Ret_t HW_GPIO_Init(void);

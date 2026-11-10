@@ -22,8 +22,9 @@
 /* Functions -----------------------------------------------------------------*/
 Ret_t HW_PWR_PrepareHalt(void)
 {
-    /* The switch closes to ground, so the falling edge is the insertion. */
-    GPIO_Init(HW_PWR_WAKE_PORT, HW_PWR_WAKE_PIN, GPIO_Mode_In_PU_IT);
+    /* The switch closes to ground, so the falling edge is the insertion.
+       Floating: the board's 100 kohm resistor is the pull-up. */
+    GPIO_Init(HW_PWR_WAKE_PORT, HW_PWR_WAKE_PIN, GPIO_Mode_In_FL_IT);
 
     disableInterrupts();
     EXTI_SetPinSensitivity(HW_PWR_WAKE_EXTI, EXTI_Trigger_Falling);

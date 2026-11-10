@@ -41,6 +41,11 @@ Ret_t HW_UART_Init(void)
     SYSCFG->RMPCR1 = (uint8_t)((SYSCFG->RMPCR1 & (uint8_t)0xCFu)
                                | (uint8_t)0x10u);
 
+    /* RX (PA3) pull-up on: with no PC attached the line floats, and noise on
+       it can be read as a command byte (hs.kim, 2026-11-09). PA3 stays an
+       input from reset; CR1 set on an input means pull-up. */
+    GPIOA->CR1 |= (uint8_t)GPIO_Pin_3;
+
     USART_DeInit(USART1);
 
     /* 9600 8N1, written directly. USART_Init() derives the divider at run
