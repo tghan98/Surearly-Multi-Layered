@@ -24,6 +24,12 @@
 #include "PcComm.h"
 
 /* Private defines -----------------------------------------------------------*/
+/* The initial readings of the first five insertions are kept as the QC
+   reference in the dump, as MFx_New_Ver did on its QC cycles
+   (DM_Main_Sq_App.c:296). The port dropped the write and every new unit
+   dumped 0/0/0/0 (field units, 2026-11-10). Only the write is restored:
+   the display no longer depends on the insert count (review D4). */
+#define SEQ_QC_REF_INSERTS       5u
 #define SEQ_INSERT_COUNT_CAP   254u
 
 /* Wake-up switch check: one read per interval. A period, not a floor - the
@@ -332,6 +338,10 @@ static void s_StepStickInsert(void)
                was never written and reads zero, so TuneGain() below reports
                OPTIC_FAIL on that very channel. */
             (void)APP_DATA_Record_SetStickPtr(APP_EXEC_Measure_GetInitial());
+            if (APP_DATA_Record_GetInsertCount() <= (uint8_t)SEQ_QC_REF_INSERTS)
+            {
+                (void)APP_DATA_Record_SetQcRef(APP_EXEC_Measure_GetInitial());
+            }
 
             /* Acceptance window and gain in one call: both walk the same four
                readings and fail on the same channel number. */

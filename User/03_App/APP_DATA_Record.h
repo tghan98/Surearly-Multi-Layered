@@ -104,6 +104,15 @@ Ret_t APP_DATA_Record_SetError(uint8_t bStep, uint8_t bCode);
 Ret_t APP_DATA_Record_SetStickPtr(const uint16_t *p_wData);
 
 /**
+  * @brief  Stores the four raw initial readings as the QC reference shown in
+  *         the dump. Written on a later pass.
+  * @param  p_wData : APP_REC_QC_REF_WORDS words, must not be NULL
+  * @note   Layer: App (data). Blocking: no. ISR: no.
+  * @retval RET_OK, RET_ERR_NULL
+  */
+Ret_t APP_DATA_Record_SetQcRef(const uint16_t *p_wData);
+
+/**
   * @brief  Stores one finished test into the next slot, newest-first order
   *         kept by advancing the dump position.
   * @param  p_wData : APP_REC_SLOT_WORDS words, must not be NULL

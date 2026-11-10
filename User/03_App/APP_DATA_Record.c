@@ -34,6 +34,7 @@
 #define REC_DIRTY_STICK_PTR   0x02u
 #define REC_DIRTY_RESULT      0x04u
 #define REC_DIRTY_DUMP_POS    0x08u
+#define REC_DIRTY_QC_REF      0x10u
 
 /* Private types -------------------------------------------------------------*/
 typedef struct
@@ -112,6 +113,10 @@ Ret_t APP_DATA_Record_Process(void)
         {
             s_rec.bDirty |= REC_DIRTY_RESULT;
         }
+        else if (wFailOffset < REC_OFF_DUMP_POS)
+        {
+            s_rec.bDirty |= REC_DIRTY_QC_REF;
+        }
         else
         {
             s_rec.bDirty |= REC_DIRTY_DUMP_POS;
@@ -163,6 +168,15 @@ Ret_t APP_DATA_Record_Process(void)
             s_rec.bDirty &= (uint8_t)~REC_DIRTY_DUMP_POS;
         }
     }
+    else if ((s_rec.bDirty & REC_DIRTY_QC_REF) != 0u)
+    {
+        tRet = Eeprom_Write(REC_OFF_QC_REF, (const uint8_t *)s_rec.awQcRef,
+                            (uint16_t)REC_QC_REF_BYTES);
+        if (tRet == RET_OK)
+        {
+            s_rec.bDirty &= (uint8_t)~REC_DIRTY_QC_REF;
+        }
+    }
     else
     {
         /* nothing left */
@@ -210,6 +224,24 @@ Ret_t APP_DATA_Record_SetStickPtr(const uint16_t *p_wData)
         s_rec.awStickPtr[bIdx] = p_wData[bIdx];
     }
     s_rec.bDirty |= REC_DIRTY_STICK_PTR;
+
+    return RET_OK;
+}
+
+Ret_t APP_DATA_Record_SetQcRef(const uint16_t *p_wData)
+{
+    uint8_t bIdx;
+
+    if (p_wData == NULL)
+    {
+        return RET_ERR_NULL;
+    }
+
+    for (bIdx = 0u; bIdx < (uint8_t)APP_REC_QC_REF_WORDS; bIdx++)
+    {
+        s_rec.awQcRef[bIdx] = p_wData[bIdx];
+    }
+    s_rec.bDirty |= REC_DIRTY_QC_REF;
 
     return RET_OK;
 }
