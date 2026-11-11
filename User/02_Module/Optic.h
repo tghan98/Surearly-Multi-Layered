@@ -7,15 +7,27 @@
   *   CH0 (T)  LED2, ADC front    CH1 (BT) LED2, ADC middle
   *   CH2 (BC) LED1, ADC middle   CH3 (C)  LED1, ADC rear
   *
-  * One measurement, driven by Optic_Process():
-  *   LED on -> settle 20 ms -> 21 conversions -> LED off -> recover 10 ms
-  * The first conversion after the channel change is discarded; the result is
-  * the mean of the middle 16 of the remaining 20, after sorting.
+  * The sensor load is 100 kohm with 22 nF: a 2.2 ms time constant. (The
+  * 22 nF value was confirmed from the BOM on 2026-10-30 - the schematic's
+  * 1 nF is an error.)
   *
-  * The 20 ms settle comes from the sensor load: 100 kohm with 22 nF is a
-  * 2.2 ms time constant, so 20 ms reaches about 99.99 %. (The old comment
-  * said 4.7 ms; the 22 nF value was confirmed from the BOM on 2026-10-30 -
-  * the schematic's 1 nF is an error.)
+  * Two kinds of measurement, chosen by the channel's charge time:
+  *
+  * Charge time 0 - steady reading, used once per insertion to check the
+  *   sensor (acceptance window) and as the first guess for tuning:
+  *     LED on -> settle 20 ms -> 1 conversion -> LED off -> recover 20 ms
+  *   At this level a bright channel sits at the phototransistor's saturation
+  *   ceiling, which is why it is not used for judging (2026-11-11).
+  *
+  * Charge time n - timed reading on the charging curve (hs.kim
+  *   Optic_Solution v1.2, 5-6), five times:
+  *     [mask IRQ] LED on -> n delay loops -> ADC start [unmask] -> fetch
+  *     -> LED off -> recover 20 ms (5 tau = 11 ms drains the node)
+  *   The result is the mean of the middle three: the sum less the highest
+  *   and the lowest (old FW: five scans, middle three).
+  *   n is found by tuning so that a dry stick reads about 1200, well below
+  *   the ceiling; every later reading of that channel uses the same n, so a
+  *   band's ratio to the dry value stays proportional to the light.
   *
   * Responsibility boundary: this module reports what the sensor read. It does
   * not decide whether a stick is present, whether a reading is in range, or
@@ -23,10 +35,9 @@
   * thresholds.
   *
   * Differences from the common skeleton (spec v2.0.3 §15):
-  *   The 21-conversion burst runs inside one Optic_Process() pass, about
-  *   4.2 ms, which exceeds the 2 ms slot budget. Splitting it across passes
-  *   would keep the 20 mA LED on for roughly 200 ms instead of 4.2 ms, which
-  *   costs far more battery than the overrun costs scheduling.
+  *   A timed reading blocks for its charge time, up to about 3.5 ms on a
+  *   dim channel, with interrupts masked. That exceeds the 2 ms slot budget;
+  *   it cannot be split, the charge time is the measurement.
   *
   * Context: main loop only. Call Optic_Process() from the 10 ms slot.
   ******************************************************************************
@@ -59,10 +70,9 @@ typedef enum
 
 /* Exported constants --------------------------------------------------------*/
 #define OPTIC_SETTLE_TK          HW_TICK_WAIT_MS(20u)
-#define OPTIC_RECOVER_TK         HW_TICK_WAIT_MS(10u)
-#define OPTIC_SAMPLE_COUNT       20u   /* kept, after one discarded */
-#define OPTIC_TRIM_EACH_SIDE     2u    /* mean of the middle 16 */
-#define OPTIC_GAIN_SCALE         100u  /* gain is an integer percent */
+#define OPTIC_RECOVER_TK         HW_TICK_WAIT_MS(20u)  /* >= 5 tau = 11 ms */
+#define OPTIC_READS              5u    /* timed readings, middle three kept */
+#define OPTIC_GAIN_SCALE         100u  /* percent scale of the App ratios */
 
 /* Module-specific return codes ----------------------------------------------*/
 #define OPTIC_ERR_ADC            (RET_MODULE_BASE + 0)   /* conversion failed */
@@ -86,8 +96,8 @@ Ret_t Optic_Start(Optic_Ch tCh);
 
 /**
   * @brief  Advances the measurement. Call from the 10 ms slot.
-  * @note   Layer: Module. Blocking: the sampling pass takes about 4.2 ms,
-  *         see the file header. ISR: no.
+  * @note   Layer: Module. Blocking: a timed reading takes its charge time,
+  *         up to about 3.5 ms, see the file header. ISR: no.
   * @retval RET_OK
   */
 Ret_t Optic_Process(void);
@@ -100,13 +110,14 @@ Ret_t Optic_Process(void);
 Ret_t Optic_Abort(void);
 
 /**
-  * @brief  Sets the tuning gain of one channel, as an integer percent.
+  * @brief  Sets the charge time of one channel.
   * @param  tCh    : channel
-  * @param  wGain  : 0 .. 65535, where OPTIC_GAIN_SCALE means x1.0
+  * @param  wLoops : 0 for a steady reading, else HW_Cpu_DelayLoop() passes
+  *                  (about 1.5 us each) between LED on and ADC start
   * @note   Layer: Module. Blocking: no. ISR: no.
   * @retval RET_OK, RET_ERR_PARAM
   */
-Ret_t Optic_SetGain(Optic_Ch tCh, uint16_t wGain);
+Ret_t Optic_SetTime(Optic_Ch tCh, uint16_t wLoops);
 
 /* Getters (cannot fail) -----------------------------------------------------*/
 /**
@@ -124,7 +135,9 @@ uint8_t Optic_IsBusy(void);
 Optic_State Optic_GetState(void);
 
 /**
-  * @brief  Raw result of the last finished measurement, in ADC counts.
+  * @brief  Result of the last finished measurement, in ADC counts.
+  *         After tuning a dry stick reads about 1200, the same axis the
+  *         gain-applied value used to be on, so the App thresholds stand.
   * @param  tCh : channel
   * @note   Layer: Module. Blocking: no. ISR: no.
   * @retval counts, or 0 if that channel has not been measured
@@ -132,21 +145,12 @@ Optic_State Optic_GetState(void);
 uint16_t Optic_GetRaw(Optic_Ch tCh);
 
 /**
-  * @brief  Last result with the channel gain applied: raw * gain / 100.
+  * @brief  Charge time of one channel.
   * @param  tCh : channel
   * @note   Layer: Module. Blocking: no. ISR: no.
-  *         Stick judgement uses this axis (supervisor, 2026-10-14).
-  * @retval scaled counts, or 0
+  * @retval delay loops, 0 if steady or the ID is out of range
   */
-uint16_t Optic_GetScaled(Optic_Ch tCh);
-
-/**
-  * @brief  Tuning gain of one channel.
-  * @param  tCh : channel
-  * @note   Layer: Module. Blocking: no. ISR: no.
-  * @retval integer percent, 0 if unset or the ID is out of range
-  */
-uint16_t Optic_GetGain(Optic_Ch tCh);
+uint16_t Optic_GetTime(Optic_Ch tCh);
 
 /**
   * @brief  Takes the error of the last measurement; reading clears it.

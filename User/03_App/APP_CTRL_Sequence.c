@@ -220,7 +220,6 @@ static void s_ClearRun(void)
 
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
-        (void)Optic_SetGain((Optic_Ch)bCh, 0u);
         s_seq.awEmptyBand[bCh] = 0u;
         s_seq.awResultBand[bCh] = 0u;
     }
@@ -350,9 +349,9 @@ static void s_StepStickInsert(void)
                 break;
             }
 
-            /* A failed conversion is not handled apart: the channel it hit
-               was never written and reads zero, so TuneGain() below reports
-               OPTIC_FAIL on that very channel. */
+            /* The job ran the steady sweep, the acceptance window and the
+               charge-time tuning; a failed conversion is reported as
+               OPTIC_FAIL on the channel it hit, like the rest. */
             (void)APP_DATA_Record_SetStickPtr(APP_EXEC_Measure_GetInitial());
 #if (APP_TEST_MINLOG == 0)
             if (APP_DATA_Record_GetInsertCount() <= (uint8_t)SEQ_QC_REF_INSERTS)
@@ -361,13 +360,8 @@ static void s_StepStickInsert(void)
             }
 #endif
 
-            /* Acceptance window and gain in one call: both walk the same four
-               readings and fail on the same channel number. */
-            tErr = APP_EXEC_Measure_TuneGain();
-            if (tErr == APP_ERR_NONE)
-            {
-                tErr = APP_EXEC_Measure_GetScaledSet(s_seq.awScaled);
-            }
+            tErr = APP_EXEC_Measure_TuneError();
+            APP_EXEC_Measure_GetTunedSet(s_seq.awScaled);
             if (tErr != APP_ERR_NONE)
             {
                 s_EnterError(tErr);
@@ -380,7 +374,7 @@ static void s_StepStickInsert(void)
             (void)Lcd_PlayAnim(s_animStickInsert,
                                (uint8_t)SEQ_ANIM_INSERT_STEPS, 0u);
 
-            /* Gains are set: the removal check can judge from here on, and
+            /* Charge times are set: the removal check can judge from here on, and
                its first check is due at once (review D6). */
             s_seq.wStickStart = (uint16_t)(HW_Tick_Get()
                                            - APP_STICK_CHECK_INTERVAL_TK);
@@ -505,7 +499,7 @@ static void s_RemoveCheck(void)
             return;
         }
         s_seq.bChecking = 0u;
-        wTest = Optic_GetScaled((Optic_Ch)s_seq.bTestCh);
+        wTest = Optic_GetRaw((Optic_Ch)s_seq.bTestCh);
         if (wTest < s_seq.awTestMin[s_seq.bTestCh])
         {
             s_seq.awTestMin[s_seq.bTestCh] = wTest;
@@ -561,7 +555,7 @@ static Ret_t s_SaveResult(void)
 
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
-        awRecord[bIndex++] = Optic_GetGain((Optic_Ch)bCh);
+        awRecord[bIndex++] = Optic_GetTime((Optic_Ch)bCh);   /* was the gain */
     }
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
@@ -653,7 +647,7 @@ static void s_StepSampleLoadWait(void)
             {
                 break;
             }
-            s_seq.awScaled[s_seq.bChannel] = Optic_GetScaled((Optic_Ch)s_seq.bChannel);
+            s_seq.awScaled[s_seq.bChannel] = Optic_GetRaw((Optic_Ch)s_seq.bChannel);
             if (s_seq.bChannel == (uint8_t)OPTIC_CH_BT)
             {
                 if (APP_EXEC_Measure_Intensity(s_seq.awScaled[OPTIC_CH_T],
@@ -753,7 +747,7 @@ static void s_SampleCheck(uint16_t wWait, uint16_t wBase, uint16_t wRatio,
             {
                 break;
             }
-            wC = Optic_GetScaled(OPTIC_CH_C);
+            wC = Optic_GetRaw(OPTIC_CH_C);
             bPass = (tError == APP_ERR_OVER_FLOW)
                     ? (wC > s_seq.wThreshold) : (wC < s_seq.wThreshold);
             if (bPass != 0u)
@@ -845,7 +839,7 @@ static void s_StepResultScan(void)
             {
                 break;
             }
-            s_seq.awResultBand[s_seq.bChannel] = Optic_GetScaled((Optic_Ch)s_seq.bChannel);
+            s_seq.awResultBand[s_seq.bChannel] = Optic_GetRaw((Optic_Ch)s_seq.bChannel);
             if (s_seq.bChannel != (uint8_t)OPTIC_CH_T)
             {
                 s_seq.bChannel--;

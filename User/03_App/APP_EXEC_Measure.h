@@ -4,22 +4,26 @@
   * @brief   : Application layer (exec) - optical measurement procedures
   *
   * Turns single channel readings from the Optic module into the procedures
-  * the test sequence needs: the initial four-channel sweep, gain tuning, and
+  * the test sequence needs: the initial sweep with charge-time tuning, and
   * the stick-present judgement.
   *
-  * The initial sweep reads each channel once: CH0 - CH1 - CH2 - CH3
-  * (hs.kim review D2, 2026-11-10). The presence checks the old FW put between
-  * them are gone; a stick pulled out during the sweep reads dark and fails
-  * the acceptance window in TuneGain().
+  * StartInitial() runs one job in two parts:
+  *   1. Steady sweep, each channel once: CH0 - CH1 - CH2 - CH3 (hs.kim
+  *      review D2, 2026-11-10), then the acceptance window 1500..3900.
+  *      A stick pulled out during the sweep reads dark and fails here.
+  *   2. Charge-time tuning, channel by channel (2026-11-11): first guess
+  *      tau x 1200 / S, then t x 1200 / reading until a dry stick reads
+  *      1200 +/- 25, at most APP_OPTIC_TUNE_TRIES readings.
+  * TuneError() then gives the outcome.
   *
   * Stick judgement lives here, not in the Optic module and not in the control
   * layer. The thresholds are specification values from APP_DATA_Config.h, and
   * both the control layer and this layer need the judgement - putting it in
   * the control layer would force a call upward (decided 2026-11-03).
   *
-  * One axis: gain-applied, threshold APP_OPTIC_STICK_THRESHOLD_SCALED
-  * (supervisor, 2026-10-14). The raw-axis gate is gone since the wake check
-  * moved to the stick switch (2026-11-10).
+  * One axis: the tuned reading, threshold APP_OPTIC_STICK_THRESHOLD_SCALED
+  * (supervisor, 2026-10-14). A tuned dry stick reads about 1200, the axis
+  * the gain-applied value was on, so the threshold carried over.
   *
   * Differences from the old FW (DM_App_Optic_*):
   *   The old routines blocked: one sweep held the main loop for about 280 ms.
@@ -54,7 +58,7 @@ typedef enum
 
 /* API -----------------------------------------------------------------------*/
 /**
-  * @brief  Clears the stored readings and gains.
+  * @brief  Clears the stored readings.
   * @note   Layer: App (exec). Blocking: no. ISR: no.
   * @retval RET_OK
   */
@@ -97,21 +101,21 @@ Ret_t APP_EXEC_Measure_Process(void);
 Ret_t APP_EXEC_Measure_Abort(void);
 
 /**
-  * @brief  Checks the initial readings against the acceptance window and sets
-  *         each channel's gain so a dry stick reads APP_OPTIC_TARGET_LIGHT.
-  * @note   Layer: App (exec). Blocking: no (arithmetic only). ISR: no.
-  *         Run after the sweep reports APP_EXEC_MEASURE_DONE.
-  * @retval APP_ERR_NONE, or APP_ERR_OPTIC_FAIL_CHn for the first bad channel
+  * @brief  Outcome of the last StartInitial() job: the acceptance window,
+  *         the tuning, or a failed conversion.
+  * @note   Layer: App (exec). Blocking: no. ISR: no.
+  *         Read after the job is no longer busy.
+  * @retval APP_ERR_NONE, or APP_ERR_OPTIC_FAIL_CHn for the channel that failed
   */
-APP_DATA_ErrorCode APP_EXEC_Measure_TuneGain(void);
+APP_DATA_ErrorCode APP_EXEC_Measure_TuneError(void);
 
 /**
-  * @brief  Fills a buffer with the initial readings after gain is applied.
+  * @brief  Fills a buffer with the last tuned reading of each channel
+  *         (about 1200 each), then zeros to APP_EXEC_MEASURE_INITIAL_WORDS.
   * @param  p_wOut : APP_EXEC_MEASURE_INITIAL_WORDS words, must not be NULL
   * @note   Layer: App (exec). Blocking: no. ISR: no.
-  * @retval APP_ERR_NONE, or APP_ERR_OPTIC_FAIL_CHn if a gain is still zero
   */
-APP_DATA_ErrorCode APP_EXEC_Measure_GetScaledSet(uint16_t *p_wOut);
+void APP_EXEC_Measure_GetTunedSet(uint16_t *p_wOut);
 
 /* Getters (cannot fail) -----------------------------------------------------*/
 /**

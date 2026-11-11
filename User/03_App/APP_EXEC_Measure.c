@@ -18,7 +18,8 @@ typedef enum
     MEAS_JOB_NONE = 0,
     MEAS_JOB_STICK,        /* one presence check              */
     MEAS_JOB_SINGLE,       /* one channel                     */
-    MEAS_JOB_INITIAL,      /* the four-channel sweep          */
+    MEAS_JOB_INITIAL,      /* the four-channel steady sweep   */
+    MEAS_JOB_TUNE,         /* charge time, channel by channel */
     MEAS_JOB_COUNT
 } Meas_Job;
 
@@ -28,6 +29,9 @@ typedef struct
     APP_EXEC_Measure_Result tResult;
     uint8_t                 bCh;          /* channel under way            */
     uint8_t                 bPresent;     /* last presence outcome        */
+    uint8_t                 bTries;       /* tuning readings, this channel */
+    uint16_t                wTime;        /* charge time being tried      */
+    APP_DATA_ErrorCode      tErr;         /* outcome of sweep and tuning  */
     uint16_t                awInitial[APP_EXEC_MEASURE_INITIAL_WORDS];
 } Meas_Ctx;
 
@@ -41,17 +45,36 @@ __near static Meas_Ctx s_meas;
 /* Private function prototypes -----------------------------------------------*/
 static void     s_JudgeStick(void);
 static Ret_t    s_StartOptic(Optic_Ch tCh);
-static uint16_t s_Scale(uint16_t wRaw, uint16_t wGain);
+static void     s_TuneTry(uint16_t wTime);
+static void     s_EndTune(APP_DATA_ErrorCode tErr);
+static APP_DATA_ErrorCode s_FailCh(void);
 
 /* Private functions ---------------------------------------------------------*/
-/* old Cal_Ratio(value, gain) = value * gain / 100 */
-static uint16_t s_Scale(uint16_t wRaw, uint16_t wGain)
+/* One tuning reading of the current channel at wTime loops. */
+static void s_TuneTry(uint16_t wTime)
 {
-    uint32_t dwVal;
+    /* 0 would mean a steady reading to Optic, and 65536 loops to the CPU. */
+    if (wTime == 0u)
+    {
+        wTime = 1u;
+    }
+    s_meas.wTime = wTime;
+    s_meas.bTries++;
+    (void)Optic_SetTime((Optic_Ch)s_meas.bCh, wTime);
+    (void)s_StartOptic((Optic_Ch)s_meas.bCh);
+}
 
-    dwVal = ((uint32_t)wRaw * (uint32_t)wGain) / (uint32_t)OPTIC_GAIN_SCALE;
+/* OPTIC_FAIL on the channel under way. */
+static APP_DATA_ErrorCode s_FailCh(void)
+{
+    return (APP_DATA_ErrorCode)((uint8_t)APP_ERR_OPTIC_FAIL_CH0 + s_meas.bCh);
+}
 
-    return (dwVal > 0xFFFFuL) ? 0xFFFFu : (uint16_t)dwVal;
+static void s_EndTune(APP_DATA_ErrorCode tErr)
+{
+    s_meas.tErr    = tErr;
+    s_meas.tJob    = MEAS_JOB_NONE;
+    s_meas.tResult = APP_EXEC_MEASURE_DONE;
 }
 
 static Ret_t s_StartOptic(Optic_Ch tCh)
@@ -59,12 +82,12 @@ static Ret_t s_StartOptic(Optic_Ch tCh)
     return Optic_Start(tCh);
 }
 
-/* The C channel is the one that sees the stick (old OPTIC_CH_3). Judged on
-   the gain-applied axis only: the raw-axis gate (2600) went with the switch
-   check and the plain four-channel sweep (2026-11-10). */
+/* The C channel is the one that sees the stick (old OPTIC_CH_3). A tuned
+   reading is on the axis the gain-applied value used to be on (dry stick
+   about 1200), so the threshold stands (2026-11-11). */
 static void s_JudgeStick(void)
 {
-    s_meas.bPresent = (Optic_GetScaled(OPTIC_CH_C)
+    s_meas.bPresent = (Optic_GetRaw(OPTIC_CH_C)
                        < (uint16_t)APP_OPTIC_STICK_THRESHOLD_SCALED)
                       ? 0u : 1u;
 }
@@ -78,6 +101,7 @@ Ret_t APP_EXEC_Measure_Init(void)
     s_meas.tResult  = APP_EXEC_MEASURE_IDLE;
     s_meas.bCh      = 0u;
     s_meas.bPresent = 0u;
+    s_meas.tErr     = APP_ERR_NONE;
 
     for (bIdx = 0u; bIdx < (uint8_t)APP_EXEC_MEASURE_INITIAL_WORDS; bIdx++)
     {
@@ -98,13 +122,18 @@ Ret_t APP_EXEC_Measure_StartInitial(void)
 
     /* Only four channels are swept; the trailing words stay zero so that the
        16-byte stored record and the PC-side parser are unchanged.
-       A channel whose conversion fails is never written and stays zero, so
-       TuneGain() reports it as OPTIC_FAIL on that channel. */
+       Charge time 0: the sweep takes steady readings. */
     for (bIdx = 0u; bIdx < (uint8_t)APP_EXEC_MEASURE_INITIAL_WORDS; bIdx++)
     {
         s_meas.awInitial[bIdx] = 0u;
     }
+    for (bIdx = 0u; bIdx < MEAS_CH_USED; bIdx++)
+    {
+        (void)Optic_SetTime((Optic_Ch)bIdx, 0u);
+    }
 
+    s_meas.tErr    = APP_ERR_NONE;
+    s_meas.bTries  = 0u;
     s_meas.tJob    = MEAS_JOB_INITIAL;
     s_meas.tResult = APP_EXEC_MEASURE_RUNNING;
     s_meas.bCh     = 0u;
@@ -145,7 +174,9 @@ Ret_t APP_EXEC_Measure_StartSingle(Optic_Ch tCh)
 
 Ret_t APP_EXEC_Measure_Process(void)
 {
-    Ret_t tOpticErr;
+    Ret_t    tOpticErr;
+    uint16_t wRead;
+    uint32_t dwTime;
 
     if (s_meas.tJob == MEAS_JOB_NONE)
     {
@@ -156,9 +187,11 @@ Ret_t APP_EXEC_Measure_Process(void)
         return RET_OK;
     }
 
-    /* A failed conversion ends the whole procedure. */
+    /* A failed conversion ends the whole procedure. In the sweep or the
+       tuning it is reported as OPTIC_FAIL on the channel it hit. */
     if (Optic_TakeError(&tOpticErr) != 0u)
     {
+        s_meas.tErr    = s_FailCh();
         s_meas.tJob    = MEAS_JOB_NONE;
         s_meas.tResult = APP_EXEC_MEASURE_FAILED;
         return RET_OK;
@@ -187,12 +220,73 @@ Ret_t APP_EXEC_Measure_Process(void)
             if (s_meas.bCh < MEAS_CH_USED)
             {
                 (void)s_StartOptic((Optic_Ch)s_meas.bCh);
+                break;
             }
-            else
+
+            /* Acceptance window on the steady readings: outside it the
+               sensor or LED is faulty, and the unit shows the book at once
+               (hs.kim review D4). */
+            for (s_meas.bCh = 0u; s_meas.bCh < MEAS_CH_USED; s_meas.bCh++)
             {
-                s_meas.tJob    = MEAS_JOB_NONE;
-                s_meas.tResult = APP_EXEC_MEASURE_DONE;
+                wRead = s_meas.awInitial[s_meas.bCh];
+                if ((wRead < (uint16_t)APP_OPTIC_INITIAL_MIN)
+                    || (wRead > (uint16_t)APP_OPTIC_INITIAL_MAX))
+                {
+                    s_EndTune(s_FailCh());
+                    return RET_OK;
+                }
             }
+
+            s_meas.tJob = MEAS_JOB_TUNE;
+            s_meas.bCh  = 0u;
+            /* fall through: first guess for channel 0 */
+
+        case MEAS_JOB_TUNE:
+            if (s_meas.bTries != 0u)
+            {
+                wRead = Optic_GetRaw((Optic_Ch)s_meas.bCh);
+
+                if ((wRead >= (uint16_t)(APP_OPTIC_TARGET_LIGHT
+                                         - APP_OPTIC_TUNE_TOLERANCE))
+                    && (wRead <= (uint16_t)(APP_OPTIC_TARGET_LIGHT
+                                            + APP_OPTIC_TUNE_TOLERANCE)))
+                {
+                    /* This channel is set; the next starts from scratch. */
+                    s_meas.bCh++;
+                    s_meas.bTries = 0u;
+                    if (s_meas.bCh >= MEAS_CH_USED)
+                    {
+                        s_EndTune(APP_ERR_NONE);
+                        break;
+                    }
+                }
+                else if (s_meas.bTries >= (uint8_t)APP_OPTIC_TUNE_TRIES)
+                {
+                    s_EndTune(s_FailCh());
+                    break;
+                }
+                else
+                {
+                    /* Scale by the shortfall. The curve bends down, so this
+                       never overshoots and closes in from below. */
+                    if (wRead == 0u)
+                    {
+                        wRead = 1u;
+                    }
+                    dwTime = ((uint32_t)s_meas.wTime
+                              * (uint32_t)APP_OPTIC_TARGET_LIGHT) / wRead;
+                    s_TuneTry((dwTime > (uint32_t)APP_OPTIC_TIME_MAX_LOOPS)
+                              ? (uint16_t)APP_OPTIC_TIME_MAX_LOOPS
+                              : (uint16_t)dwTime);
+                    break;
+                }
+            }
+
+            /* First guess from the steady reading: tau x 1200 / S. */
+            dwTime = ((uint32_t)APP_OPTIC_TAU_LOOPS
+                      * (uint32_t)APP_OPTIC_TARGET_LIGHT)
+                     / s_meas.awInitial[s_meas.bCh];
+            s_TuneTry((uint16_t)dwTime);
             break;
 
         default:
@@ -211,76 +305,19 @@ Ret_t APP_EXEC_Measure_Abort(void)
     return Optic_Abort();
 }
 
-APP_DATA_ErrorCode APP_EXEC_Measure_TuneGain(void)
+APP_DATA_ErrorCode APP_EXEC_Measure_TuneError(void)
 {
-    uint8_t  bCh;
-    uint16_t wRaw;
-    uint16_t wGain;
-    uint16_t wTuned;
-
-    for (bCh = 0u; bCh < MEAS_CH_USED; bCh++)
-    {
-        wRaw = s_meas.awInitial[bCh];
-
-        if ((wRaw < (uint16_t)APP_OPTIC_INITIAL_MIN)
-            || (wRaw > (uint16_t)APP_OPTIC_INITIAL_MAX))
-        {
-            return (APP_DATA_ErrorCode)((uint8_t)APP_ERR_OPTIC_FAIL_CH0 + bCh);
-        }
-
-        /* Round to nearest: truncating biases the applied value low by up to
-           about 32 counts at this target. wRaw is 1500..3900 here, so the
-           gain lands in 31..80. */
-        wGain = (uint16_t)((((uint32_t)APP_OPTIC_TARGET_LIGHT
-                             * (uint32_t)OPTIC_GAIN_SCALE)
-                            + ((uint32_t)wRaw / 2uL)) / (uint32_t)wRaw);
-
-        /* Check the exact value that will be stored, so a channel that cannot
-           be brought near the target fails here instead of silently landing
-           outside tolerance. */
-        wTuned = s_Scale(wRaw, wGain);
-        if ((wTuned < (uint16_t)(APP_OPTIC_TARGET_LIGHT - APP_OPTIC_TUNE_TOLERANCE))
-            || (wTuned > (uint16_t)(APP_OPTIC_TARGET_LIGHT + APP_OPTIC_TUNE_TOLERANCE)))
-        {
-            return (APP_DATA_ErrorCode)((uint8_t)APP_ERR_OPTIC_FAIL_CH0 + bCh);
-        }
-
-        (void)Optic_SetGain((Optic_Ch)bCh, wGain);
-    }
-
-    return APP_ERR_NONE;
+    return s_meas.tErr;
 }
 
-APP_DATA_ErrorCode APP_EXEC_Measure_GetScaledSet(uint16_t *p_wOut)
+void APP_EXEC_Measure_GetTunedSet(uint16_t *p_wOut)
 {
-    uint8_t  bCh;
-    uint16_t wGain;
-
-    if (p_wOut == NULL)
-    {
-        return APP_ERR_NONE;
-    }
+    uint8_t bCh;
 
     for (bCh = 0u; bCh < (uint8_t)APP_EXEC_MEASURE_INITIAL_WORDS; bCh++)
     {
-        p_wOut[bCh] = 0u;
+        p_wOut[bCh] = (bCh < MEAS_CH_USED) ? Optic_GetRaw((Optic_Ch)bCh) : 0u;
     }
-
-    for (bCh = 0u; bCh < MEAS_CH_USED; bCh++)
-    {
-        wGain = Optic_GetGain((Optic_Ch)bCh);
-
-        /* Zero gain means TuneGain() has not run. Fail loudly rather than
-           store a plausible-looking number. */
-        if (wGain == 0u)
-        {
-            return (APP_DATA_ErrorCode)((uint8_t)APP_ERR_OPTIC_FAIL_CH0 + bCh);
-        }
-
-        p_wOut[bCh] = s_Scale(s_meas.awInitial[bCh], wGain);
-    }
-
-    return APP_ERR_NONE;
 }
 
 APP_EXEC_Measure_Result APP_EXEC_Measure_GetResult(void)

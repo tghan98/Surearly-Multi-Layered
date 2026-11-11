@@ -8,6 +8,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "Optic.h"
 #include "HW_ADC_Drive.h"
+#include "HW_Cpu_Drive.h"
 #include "HW_GPIO_Drive.h"
 #include "HW_Tick_Drive.h"
 
@@ -17,9 +18,6 @@
 #define OPTIC_LED_ON             HW_GPIO_LEVEL_LOW
 #define OPTIC_LED_OFF            HW_GPIO_LEVEL_HIGH
 
-#define OPTIC_BURST_COUNT        (OPTIC_SAMPLE_COUNT)
-#define OPTIC_KEEP_COUNT         (OPTIC_SAMPLE_COUNT - (2u * OPTIC_TRIM_EACH_SIDE))
-
 /* Private types -------------------------------------------------------------*/
 typedef struct
 {
@@ -27,7 +25,11 @@ typedef struct
     Optic_Ch    tCh;                        /* channel being measured     */
     uint16_t    wStart;                     /* tick at the step entry     */
     uint16_t    awRaw[OPTIC_CH_COUNT];      /* last result per channel    */
-    uint16_t    awGain[OPTIC_CH_COUNT];     /* integer percent            */
+    uint16_t    awTime[OPTIC_CH_COUNT];     /* charge time, delay loops   */
+    uint16_t    wSum;                       /* of the reads so far        */
+    uint16_t    wMin;
+    uint16_t    wMax;
+    uint8_t     bReads;                     /* reads taken so far         */
     Ret_t       tError;                     /* pending, taken by _TakeError */
     uint8_t     bErrPending;
 } Optic_Ctx;
@@ -55,7 +57,8 @@ static const HW_ADC_Id s_adcMap[OPTIC_CH_COUNT] =
 
 /* Private function prototypes -----------------------------------------------*/
 static void  s_LedsOff(void);
-static Ret_t s_Burst(Optic_Ch tCh, uint16_t *p_wOut);
+static Ret_t s_ReadSteady(uint16_t *p_wOut);
+static Ret_t s_ReadTimed(uint16_t *p_wOut);
 
 /* Private functions ---------------------------------------------------------*/
 static void s_LedsOff(void)
@@ -64,57 +67,43 @@ static void s_LedsOff(void)
     (void)HW_GPIO_Write(HW_GPIO_LED2, OPTIC_LED_OFF);
 }
 
-/* One burst of conversions, kept in a single pass on purpose: splitting it
-   would hold the 20 mA LED on for about 200 ms instead of 4.2 ms. */
-static Ret_t s_Burst(Optic_Ch tCh, uint16_t *p_wOut)
+/* The LED has been on for OPTIC_SETTLE_TK: the node is at its steady level.
+   One conversion. The old FW discarded the first after a channel change;
+   with a 16-cycle window the leftover on the ADC's few-pF sampling
+   capacitor moves the 22 nF node by well under a count, the same reason
+   the timed reading has no discard (2026-11-11, flash). */
+static Ret_t s_ReadSteady(uint16_t *p_wOut)
 {
-    uint16_t awSample[OPTIC_BURST_COUNT];
-    uint16_t wDiscard;
-    uint16_t wTemp;
-    uint16_t wSum = 0u;
-    uint8_t  i;
-    uint8_t  j;
+    return (HW_ADC_Read(s_adcMap[s_optic.tCh], p_wOut) == RET_OK)
+           ? RET_OK : OPTIC_ERR_ADC;
+}
 
-    /* The first conversion after a channel change is not trusted. */
-    if (HW_ADC_Read(s_adcMap[tCh], &wDiscard) != RET_OK)
+/* One reading on the charging curve (hs.kim Optic_Solution v1.2, 5-6).
+   The node starts empty: the LED has been off for OPTIC_RECOVER_TK.
+   From LED on to ADC start nothing may cut in, or the charge time stretches
+   by a different amount each time - so interrupts are masked first.
+   They come back right after the start: the input is held by then, and
+   HW_ADC_Fetch() needs the tick for its timeout.
+   No discarded conversion, see s_ReadSteady(). */
+static Ret_t s_ReadTimed(uint16_t *p_wOut)
+{
+    HW_ADC_Id tAdc = s_adcMap[s_optic.tCh];
+    Ret_t     tRet;
+
+    if (HW_ADC_Select(tAdc) != RET_OK)
     {
         return OPTIC_ERR_ADC;
     }
 
-    for (i = 0u; i < (uint8_t)OPTIC_BURST_COUNT; i++)
-    {
-        if (HW_ADC_Read(s_adcMap[tCh], &awSample[i]) != RET_OK)
-        {
-            return OPTIC_ERR_ADC;
-        }
-    }
+    HW_Cpu_IrqDisable();
+    (void)HW_GPIO_Write(s_ledMap[s_optic.tCh], OPTIC_LED_ON);
+    HW_Cpu_DelayLoop(s_optic.awTime[s_optic.tCh]);
+    HW_ADC_Start();
+    HW_Cpu_IrqEnable();
 
-    /* Insertion sort: 20 items, and it beats bubble sort on a 2 MHz core. */
-    for (i = 1u; i < (uint8_t)OPTIC_BURST_COUNT; i++)
-    {
-        wTemp = awSample[i];
-        j = i;
-        while ((j > 0u) && (awSample[j - 1u] > wTemp))
-        {
-            awSample[j] = awSample[j - 1u];
-            j--;
-        }
-        awSample[j] = wTemp;
-    }
+    tRet = HW_ADC_Fetch(tAdc, p_wOut);
 
-    /* Mean of the middle 16: the two lowest and two highest are dropped. */
-    for (i = (uint8_t)OPTIC_TRIM_EACH_SIDE;
-         i < (uint8_t)(OPTIC_BURST_COUNT - OPTIC_TRIM_EACH_SIDE); i++)
-    {
-        /* 16 samples x 4095 (12-bit ADC full scale) = 65520, inside
-           uint16_t. Keeping the sum 16-bit avoids the 32-bit add/divide
-           library helpers on this 8-bit core. */
-        wSum += awSample[i];
-    }
-
-    *p_wOut = (uint16_t)(wSum / OPTIC_KEEP_COUNT);
-
-    return RET_OK;
+    return (tRet == RET_OK) ? RET_OK : OPTIC_ERR_ADC;
 }
 
 /* Functions -----------------------------------------------------------------*/
@@ -133,7 +122,7 @@ Ret_t Optic_Init(void)
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
         s_optic.awRaw[bCh]  = 0u;
-        s_optic.awGain[bCh] = 0u;
+        s_optic.awTime[bCh] = 0u;
     }
 
     return RET_OK;
@@ -150,20 +139,34 @@ Ret_t Optic_Start(Optic_Ch tCh)
         return RET_BUSY;
     }
 
-    s_optic.tCh = tCh;
+    s_optic.tCh    = tCh;
+    s_optic.bReads = 0u;
+    s_optic.wSum   = 0u;
+    s_optic.wMin   = 0xFFFFu;
+    s_optic.wMax   = 0u;
 
     (void)HW_ADC_Enable();
-    (void)HW_GPIO_Write(s_ledMap[tCh], OPTIC_LED_ON);
 
-    s_optic.wStart = HW_Tick_Get();
-    s_optic.tState  = OPTIC_SETTLE;
+    if (s_optic.awTime[tCh] == 0u)
+    {
+        /* Steady reading: LED on now, read after the settle. */
+        (void)HW_GPIO_Write(s_ledMap[tCh], OPTIC_LED_ON);
+        s_optic.wStart = HW_Tick_Get();
+        s_optic.tState = OPTIC_SETTLE;
+    }
+    else
+    {
+        /* Timed reading: the node is already empty, an idle module has had
+           its LEDs off for at least OPTIC_RECOVER_TK. */
+        s_optic.tState = OPTIC_SAMPLE;
+    }
 
     return RET_OK;
 }
 
 Ret_t Optic_Process(void)
 {
-    uint16_t wResult = 0u;
+    uint16_t wRead = 0u;
     Ret_t    tRet;
 
     switch (s_optic.tState)
@@ -180,32 +183,69 @@ Ret_t Optic_Process(void)
             break;
 
         case OPTIC_SAMPLE:
-            tRet = s_Burst(s_optic.tCh, &wResult);
+            if (s_optic.awTime[s_optic.tCh] == 0u)
+            {
+                tRet = s_ReadSteady(&wRead);
+                s_optic.bReads = OPTIC_READS;   /* one reading is the result */
+            }
+            else
+            {
+                tRet = s_ReadTimed(&wRead);
+                s_optic.bReads++;
+            }
 
             /* LED off before anything else: a stuck ADC must not hold 20 mA. */
             (void)HW_GPIO_Write(s_ledMap[s_optic.tCh], OPTIC_LED_OFF);
-            (void)HW_ADC_Disable();
 
-            if (tRet == RET_OK)
-            {
-                s_optic.awRaw[s_optic.tCh] = wResult;
-            }
-            else
+            if (tRet != RET_OK)
             {
                 s_optic.awRaw[s_optic.tCh] = 0u;
                 s_optic.tError      = tRet;
                 s_optic.bErrPending = 1u;
+                s_optic.bReads      = OPTIC_READS;
+                s_optic.wSum        = 0u;
+            }
+            else
+            {
+                s_optic.wSum += wRead;   /* 5 x 4095 fits in 16 bits */
+                if (wRead < s_optic.wMin)
+                {
+                    s_optic.wMin = wRead;
+                }
+                if (wRead > s_optic.wMax)
+                {
+                    s_optic.wMax = wRead;
+                }
+            }
+
+            if (s_optic.bReads >= OPTIC_READS)
+            {
+                (void)HW_ADC_Disable();
+                if (s_optic.awTime[s_optic.tCh] != 0u)
+                {
+                    /* Old FW: five readings, mean of the middle three. Without
+                       a sort: the sum less the highest and the lowest. */
+                    s_optic.wSum = (uint16_t)((s_optic.wSum - s_optic.wMin
+                                               - s_optic.wMax) / 3u);
+                }
+                if (tRet == RET_OK)
+                {
+                    s_optic.awRaw[s_optic.tCh] = s_optic.wSum;
+                }
             }
 
             s_optic.wStart = HW_Tick_Get();
-            s_optic.tState  = OPTIC_RECOVER;
+            s_optic.tState = OPTIC_RECOVER;
             break;
 
         case OPTIC_RECOVER:
-            /* Let the supply recover before the next burst draws 20 mA. */
+            /* The node drains through 100 kohm: 5 tau = 11 ms. Every timed
+               reading must start from empty, and the supply recovers from
+               the 20 mA LED pulse in the same wait. */
             if (HW_Tick_Elapsed(s_optic.wStart) >= OPTIC_RECOVER_TK)
             {
-                s_optic.tState = OPTIC_IDLE;
+                s_optic.tState = (s_optic.bReads >= OPTIC_READS)
+                                 ? OPTIC_IDLE : OPTIC_SAMPLE;
             }
             break;
 
@@ -226,14 +266,14 @@ Ret_t Optic_Abort(void)
     return RET_OK;
 }
 
-Ret_t Optic_SetGain(Optic_Ch tCh, uint16_t wGain)
+Ret_t Optic_SetTime(Optic_Ch tCh, uint16_t wLoops)
 {
     if ((uint8_t)tCh >= (uint8_t)OPTIC_CH_COUNT)
     {
         return RET_ERR_PARAM;
     }
 
-    s_optic.awGain[tCh] = wGain;
+    s_optic.awTime[tCh] = wLoops;
 
     return RET_OK;
 }
@@ -258,30 +298,14 @@ uint16_t Optic_GetRaw(Optic_Ch tCh)
     return s_optic.awRaw[tCh];
 }
 
-uint16_t Optic_GetScaled(Optic_Ch tCh)
-{
-    uint32_t dwScaled;
-
-    if ((uint8_t)tCh >= (uint8_t)OPTIC_CH_COUNT)
-    {
-        return 0u;
-    }
-
-    /* old Cal_Ratio(value, gain) = value * gain / 100 */
-    dwScaled = ((uint32_t)s_optic.awRaw[tCh] * (uint32_t)s_optic.awGain[tCh])
-               / (uint32_t)OPTIC_GAIN_SCALE;
-
-    return (dwScaled > 0xFFFFuL) ? 0xFFFFu : (uint16_t)dwScaled;
-}
-
-uint16_t Optic_GetGain(Optic_Ch tCh)
+uint16_t Optic_GetTime(Optic_Ch tCh)
 {
     if ((uint8_t)tCh >= (uint8_t)OPTIC_CH_COUNT)
     {
         return 0u;
     }
 
-    return s_optic.awGain[tCh];
+    return s_optic.awTime[tCh];
 }
 
 uint8_t Optic_TakeError(Ret_t *p_tErr)

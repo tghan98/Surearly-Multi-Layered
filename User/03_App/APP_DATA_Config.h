@@ -55,9 +55,23 @@
 #define APP_OPTIC_INITIAL_MIN            1500u   /* old OPTIC_INITIAL_MIN_100 */
 #define APP_OPTIC_INITIAL_MAX            3900u   /* old OPTIC_INITIAL_MAX_100 */
 
-/* LED gain tuning: a dry stick is normalised to this reading. */
+/* Charge-time tuning (hs.kim Optic_Solution v1.1 5-5, v1.2 5-6, 2026-11-11).
+   Each channel's charge time is set so that a dry stick reads this value on
+   the charging curve, well below the phototransistor's saturation ceiling.
+   It replaced a digital gain on the steady reading, which only rescaled a
+   reading that was already clipped. */
 #define APP_OPTIC_TARGET_LIGHT           1200u   /* old _nTAGET_LIGHT          */
 #define APP_OPTIC_TUNE_TOLERANCE           25u   /* old OPTIC_TUNED_TOLERANCE  */
+/* First guess: the curve starts as a straight line of slope S / tau, so
+   tau x 1200 / S is a little short of the target, and each correction
+   t x 1200 / reading closes in from below without overshooting (the curve
+   bends down). tau = 2.2 ms is 1467 loops of 1.5 us. Simulated: S 3900
+   needs 3 readings, S 1500 needs 6. */
+#define APP_OPTIC_TAU_LOOPS              1467u
+#define APP_OPTIC_TUNE_TRIES               10u
+/* About 9 ms, four time constants: nothing inside the acceptance window
+   needs this long, it only stops a runaway. */
+#define APP_OPTIC_TIME_MAX_LOOPS         6000u
 
 /* Line intensity thresholds -------------------------------------------------*/
 #define APP_T_LINE_THRESHOLD             1080u   /* old _nT_LINE_INT_THRESHOLD */
