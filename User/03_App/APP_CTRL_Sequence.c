@@ -778,8 +778,8 @@ static void s_StepOverSampleCheck(void)
        handler - the LCD file's own OVER/LOW_SAMPLE_CHECK cases are empty
        because the display was already set. Reading only the LCD file is how
        this was first put 20 s late.
-       The blink therefore covers 20 s + 155 s = 175 s, which is the
-       "blinks, then about 3 minutes" in the user manual.
+       The blink therefore covers 20 s + 160 s = 180 s, the manual's
+       "물방울이 깜빡이고 3분 후" (APP_BLINK_TO_RESULT_TK).
        (corrected on the bench 2026-11-03) */
     if (s_seq.tStep == APP_SEQ_LOW_SAMPLE_CHECK)
     {

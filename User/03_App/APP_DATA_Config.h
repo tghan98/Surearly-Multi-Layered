@@ -95,12 +95,17 @@
 #define APP_SAMPLE_LOAD_WAIT_TK    HW_TICK_MS(300000uL) /* old SAMPLE_LOAD_WAIT_TIME 30000 */
 #define APP_OVER_SAMPLE_CHECK_TK   HW_TICK_MS(  5000uL) /* old OVER_SAMPLE_CHECK_TIME  500 */
 #define APP_LOW_SAMPLE_CHECK_TK    HW_TICK_MS( 20000uL) /* old LOW_SAMPLE_CHECK_TIME  2000 */
-#define APP_TOTAL_REACTION_TK      HW_TICK_MS(180000uL) /* old TOTAL_REACTION_TIME   18000 */
+/* User manual, step 5: "물방울이 깜빡이고 3분 후에 검사결과가 결과창에
+   나타납니다." DROP starts blinking when the over-sample check passes, so
+   the blink covers the low-sample check and the reaction wait, and that
+   span is what must be 3 minutes. MFx_New_Ver's 180 s counted from sample
+   arrival and so blinked 175 s; the shipped alpha.2 blinked about 204 s.
+   (hs.kim: "설명서와 동일하게", 2026-11-11) */
+#define APP_BLINK_TO_RESULT_TK     HW_TICK_MS(180000uL)
 #define APP_RESULT_OUT_WAIT_TK     HW_TICK_MS(300000uL) /* old RESULT_OUT_WAIT_TIME  30000 */
 
-/* Remainder of the reaction window after the two sample checks. */
-#define APP_REACTION_WAIT_TK     ((uint16_t)(APP_TOTAL_REACTION_TK \
-                                             - APP_OVER_SAMPLE_CHECK_TK \
+/* Remainder of the blink after the low-sample check: 160 s. */
+#define APP_REACTION_WAIT_TK     ((uint16_t)(APP_BLINK_TO_RESULT_TK \
                                              - APP_LOW_SAMPLE_CHECK_TK))
 
 /* How often the stick is re-checked for removal.
