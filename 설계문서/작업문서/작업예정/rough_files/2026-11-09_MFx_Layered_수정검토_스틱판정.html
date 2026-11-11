@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MFx_Layered 스틱 판정 수정 검토</title>
+<style>
+:root { --bg:#f7f8fa; --panel:#fff; --border:#d8dce2; --header-bg:#1f2d3d; --header-fg:#fff; --section-bg:#e8edf5;
+  --note-bg:#fff8e1; --note-fg:#6b5900; --warn-bg:#fff1f0; --warn-fg:#8c1d18; --new-bg:#eafaf0; --ok-fg:#14683c;
+  --accent:#2f6fed; --text:#23292f; --muted:#6b7480; --code-bg:#eef1f5; }
+* { box-sizing:border-box; }
+body { margin:0; padding:24px 16px; background:var(--bg); color:var(--text); font-family:"Segoe UI","Malgun Gothic",sans-serif; font-size:14px; line-height:1.55; }
+main { max-width:1120px; margin:0 auto; }
+h1 { font-size:20px; margin:0 0 4px; }
+h2 { font-size:16px; margin:28px 0 10px; border-left:4px solid var(--accent); padding-left:8px; }
+h3 { font-size:14px; margin:18px 0 6px; }
+.subtitle { color:var(--muted); font-size:13px; margin-bottom:16px; }
+.summary { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:8px; padding:12px 16px; }
+.note { background:var(--note-bg); color:var(--note-fg); border-radius:6px; padding:8px 12px; font-size:13px; margin:8px 0; }
+.warnbox { background:var(--warn-bg); color:var(--warn-fg); border-radius:8px; padding:10px 14px; font-size:13px; margin:8px 0; }
+.table-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow-x:auto; margin:8px 0; }
+table { border-collapse:collapse; width:100%; }
+thead th { background:var(--header-bg); color:var(--header-fg); text-align:left; padding:7px 10px; font-size:12.5px; white-space:nowrap; }
+tbody td { padding:6px 10px; border-top:1px solid var(--border); vertical-align:top; font-size:13px; }
+tr.section td { background:var(--section-bg); font-weight:700; }
+tr.changed td { background:var(--new-bg); }
+tr.diff td { background:var(--warn-bg); }
+td.mono, code { font-family:Consolas,monospace; }
+code { background:var(--code-bg); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+td.c { text-align:center; white-space:nowrap; }
+.ok { color:var(--ok-fg); font-weight:700; } .ng { color:var(--warn-fg); font-weight:700; }
+.tag { display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; font-weight:600; background:#e3e6ea; color:#40474f; }
+.tag.fact { background:#d9f0e3; color:#14683c; } .tag.guess { background:#fff3cd; color:#7a5c00; } .tag.todo { background:#fde2e1; color:#8c1d18; }
+pre { background:#1f2d3d; color:#e6edf5; padding:12px 14px; border-radius:8px; overflow-x:auto; font-size:12px; line-height:1.45; }
+.flow { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.flow > div { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 14px; }
+.flow h3 { margin-top:0; }
+@media (max-width:760px) { .flow { grid-template-columns:1fr; } }
+ul, ol { padding-left:22px; } li { margin:2px 0; }
+footer { margin-top:28px; color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+<h1>MFx_Layered 스틱 판정·이탈 확인 수정 검토</h1>
+<div class="subtitle">작성 2026-11-09 · hs.kim (Claude Code 보조) · 대상 <code>MFx_Layered/User</code> (git f11f22b + 미커밋 LCD 애니메이션 변경분, 줄 번호는 2026-11-09 작업 사본 기준) · 상태: <b>설계 확정, 코드 미수정</b> · 개정 2026-11-09: 이탈 기준 750 → 556(기존 유지), LED 전류 20mA → 0.1~0.4mA(추정) 정정</div>
+
+<h2>요약</h2>
+<div class="summary">
+<ul>
+  <li>기상 직후 스틱 확인을 <b>C 원시값 2600 고정 판정 → PB1 스위치 100ms 채터링 확인(10회 중 8회 이상 Low)</b>으로 바꾼다.</li>
+  <li>기상 후 C·BC·BT·T를 <b>각 1회만</b> 측정하고(기존 9회), 원시값 1500~3900 범위 밖이면 삽입 횟수와 관계없이 <b>항상 BOOK 오류</b>를 표시한다(삽입 5회 QC 구분 삭제).</li>
+  <li>스틱 이탈 확인은 튜닝 게인 계산 직후부터 결과 측정까지 <b>500ms 주기</b>, 판정은 <b>게인 적용 C &lt; 556</b>(튜닝값 1200의 46%, 기존 기준 유지 — 2026-11-09 750에서 변경). 시퀀스가 광학 측정 중일 때는 이탈 확인을 멈춘다.</li>
+  <li>해결되는 문제: 고정 2600에 의한 정상 스틱 거부(A1·A3), 6.25초 이탈 확인 공백, 기상 판정의 반환값·결과 미확인(B1·B2). 실측으로 확인할 것: 스틱 없음 C가 556(초기값의 46%) 아래로 충분히 떨어지는지, 500ms로 확인 횟수가 늘어도 젖은 스틱에서 이탈 오판이 없는지.</li>
+</ul>
+</div>
+
+<h2>1. 배경</h2>
+<ul>
+  <li>스틱 삽입 후 스위치(PB1)가 계속 눌린 상태를 유지해야 하나, 기구 문제로 접촉이 불안정함 → 검사 중 스틱 유무는 C 광학값으로 판정해야 함 <span class="tag fact">담당자 설명</span>.</li>
+  <li>센서별 C 원시값 편차 1000~3200 <span class="tag fact">담당자 설명</span>.</li>
+  <li>현재 코드 문제 <span class="tag fact">코드 확인</span>
+    <ul>
+      <li>기상할 때마다 C 원시값을 고정 2600과 비교(<code>APP_CTRL_Sequence.c:270</code> → <code>APP_EXEC_Measure.c:86-87</code>). 삽입 1회당 6번(GATE 1 + 초기 측정 5). 튜닝 하한 1500보다 높아 C의 실제 하한이 2600이 됨.</li>
+      <li>검사 중 이탈 확인 주기가 6.25초(<code>APP_DATA_Config.h:92</code>, 기존 FW의 이중 카운터를 그대로 이식). 시료 대기부터만 확인하고, 삽입 애니메이션 중과 과다·소량·결과 측정 구간에는 확인 공백이 있음.</li>
+      <li>기상 판정(원시값 2600)과 검사 중 판정(게인 적용값 556 = 튜닝값의 46%)의 기준 체계가 서로 다름.</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>2. 확정된 결정 사항 (2026-11-09)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>항목</th><th>결정</th></tr></thead>
+<tbody>
+<tr><td>D1</td><td>기상 직후 스틱 확인</td><td>100ms 채터링 확인. PB1을 10ms마다 10회 읽어 <b>8회 이상 Low면 통과</b>. 실패하면 표시 없이 다시 Halt</td></tr>
+<tr><td>D2</td><td>초기 측정</td><td>C, BC, BT, T 각 1회 연속 측정. 채널 사이 C 확인 삭제. 이탈 확인용 C 단독 측정 기능은 유지</td></tr>
+<tr><td>D3</td><td>초기값 범위 / 튜닝</td><td>원시값 1500~3900, 튜닝 목표 1200 (기존 유지)</td></tr>
+<tr><td>D4</td><td>범위 밖 처리</td><td>삽입 5회 QC 구분 삭제(채터링 확인이 노이즈 기상 방지 역할을 대신함). 범위 밖이면 항상 BOOK 오류</td></tr>
+<tr><td>D5</td><td>이탈 판정 기준</td><td>게인 적용 C &lt; <b>556</b>이면 이탈 (기존 기준 유지). <i>2026-11-09 변경: 처음 750(62.5%)으로 정했으나, 반응 중 C 라인 형성으로 C가 떨어질 때 정상 검사를 이탈로 오판할 위험이 있어 기존 556(46%)으로 되돌림</i></td></tr>
+<tr><td>D6</td><td>이탈 확인 주기·구간</td><td>튜닝 게인 계산 직후부터 결과 측정(RESULT_SCAN)까지 <b>500ms</b> 주기</td></tr>
+<tr><td>D7</td><td>측정 충돌</td><td>시퀀스가 C·BC·BT·T를 측정하는 동안에는 이탈 확인을 잠시 멈춤</td></tr>
+</tbody></table></div>
+
+<h2>3. 시퀀스 비교</h2>
+<div class="flow">
+<div>
+<h3>현재</h3>
+<ol>
+  <li>Halt → PB1 기상 → 10ms 대기</li>
+  <li><b>C 원시값 &lt; 2600 → 스틱 없음</b><br>삽입 5회 미만이면 STICK_FAIL(BOOK), 아니면 무표시 Halt</li>
+  <li>삽입 횟수 +1, 사용 횟수 초과 확인</li>
+  <li>삽입 애니메이션 시작 + 9회 측정<br>(C확인 → T → C확인 → BT → C확인 → BC → C확인 → C → C확인)<br>C 확인 실패 시 STICK_REMOVE</li>
+  <li>범위 1500~3900 확인 + 게인 계산<br>실패 시 QC 5회 이하만 BOOK, 아니면 무표시 Halt</li>
+  <li>애니메이션 종료(약 4.5초) → DROP 켜짐</li>
+  <li>시료 대기부터 반응 대기까지 <b>6.25초마다</b> C ≥ 556 확인</li>
+  <li>결과 측정(이탈 확인 없음) → YES/NO</li>
+</ol>
+</div>
+<div>
+<h3>변경 후</h3>
+<ol>
+  <li>Halt → PB1 기상</li>
+  <li><b>100ms 채터링 확인 (10회 중 8회 이상 Low)</b><br>실패 시 무표시 Halt</li>
+  <li>삽입 횟수 +1(기록용), 사용 횟수 초과 확인</li>
+  <li><b>C, BC, BT, T 각 1회 측정</b> (약 0.1초)</li>
+  <li>범위 1500~3900 확인 + 게인 계산<br>실패 시 <b>항상 BOOK</b></li>
+  <li>삽입 애니메이션 시작 + <b>이탈 확인 시작</b></li>
+  <li>애니메이션 → 시료 대기 → 과다 → 소량 → 반응 대기 → 결과 측정까지 <b>500ms마다</b> C ≥ 556 확인<br>(시퀀스 측정 중에는 멈춤)</li>
+  <li>YES/NO</li>
+</ol>
+</div>
+</div>
+<p class="note">삽입 애니메이션 시작 시점이 측정 전에서 측정·튜닝 후로 약 0.1초 늦어진다. 범위 오류 시에는 애니메이션 없이 바로 BOOK이 표시된다.</p>
+
+<h2>4. 판정 기준</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th>현재</th><th>변경 후</th></tr></thead>
+<tbody>
+<tr><td>기상 시 스틱 확인</td><td>C 원시값 ≥ 2600 (삽입 1회당 6번)</td><td class="ok">PB1 채터링 확인</td></tr>
+<tr><td>초기 측정 횟수</td><td>9회 (C 확인 5 + 채널 4)</td><td class="ok">4회</td></tr>
+<tr><td>초기값 범위</td><td>1500~3900</td><td>1500~3900 (같음)</td></tr>
+<tr><td>범위 밖 처리</td><td>삽입 5회 이하 BOOK, 6회부터 무표시</td><td class="ok">항상 BOOK</td></tr>
+<tr><td>이탈 기준</td><td>게인 적용 C &lt; 556 (튜닝값의 46%)</td><td>게인 적용 C &lt; 556 (46%, 같음)</td></tr>
+<tr><td>이탈 확인 주기</td><td>6.25초 (실제 6.25~6.5초)</td><td class="ok">500ms</td></tr>
+<tr><td>이탈 확인 구간</td><td>시료 대기 ~ 반응 대기</td><td class="ok">게인 계산 직후 ~ 결과 측정</td></tr>
+</tbody></table></div>
+
+<h3>이탈 기준 556의 기기별 원시값 환산</h3>
+<p>게인 = 1200 × 100 / 초기 C 원시값 → 이탈 원시값 = 556 × 100 / 게인 ≈ 초기값 × 46.3%</p>
+<div class="table-wrap"><table>
+<thead><tr><th>초기 C 원시값</th><th>게인</th><th>이탈 판정 원시값 (556)</th><th>참고: 검토했던 750 (채택 안 함)</th></tr></thead>
+<tbody>
+<tr><td>1500</td><td>80</td><td>695 미만</td><td>938 이하</td></tr>
+<tr><td>2000</td><td>60</td><td>927 미만</td><td>1250 이하</td></tr>
+<tr><td>2600</td><td>46</td><td>1209 미만</td><td>1630 이하</td></tr>
+<tr><td>3200</td><td>38</td><td>1463 미만</td><td>1974 이하</td></tr>
+<tr><td>3900</td><td>31</td><td>1794 미만</td><td>2419 이하</td></tr>
+</tbody></table></div>
+<p class="note">게인은 반올림 정수이므로 환산값은 비율 계산(46.3%)과 몇 count 차이가 난다. 표는 정수 게인으로 계산한 값. 750은 반응 중 C 하락에 대한 여유가 작아(정상 C가 초기값의 62.5% 아래로만 떨어져도 이탈) 채택하지 않음.</p>
+
+<h2>5. 수정 대상 코드</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>파일 / 위치</th><th>현재</th><th>변경</th><th>관련 결정</th></tr></thead>
+<tbody>
+<tr class="section"><td colspan="5">APP_CTRL_Sequence.c</td></tr>
+<tr><td>M1</td><td><code>:29</code> <code>SEQ_QC_CYCLE_LIMIT</code>, <code>s_seq.bQcCycle</code>, <code>:900</code> <code>IsQcCycle()</code></td><td>삽입 5회 QC 구분</td><td>삭제. <code>IsQcCycle()</code>은 외부 사용처 없음(grep 확인). <code>RestartQc()</code>(:877)의 <code>bQcCycle = 1</code>도 삭제</td><td>D4</td></tr>
+<tr><td>M2</td><td><code>:190</code> <code>s_InitialOpticError()</code></td><td>QC면 오류 표시, 아니면 기록 후 무표시 IDLE</td><td>항상 <code>s_EnterError()</code>. 함수 자체를 없애고 호출부에서 직접 <code>s_EnterError()</code> 사용 가능</td><td>D4</td></tr>
+<tr><td>M3</td><td><code>:264</code> SETTLE, <code>:275</code> GATE</td><td>10ms 대기 → <code>StartStickCheck(0)</code> → 원시값 2600 판정 → <code>UpdateWakeFail</code>·QC 분기</td><td>SETTLE: 10ms마다 PB1(<code>HW_GPIO_Read(HW_GPIO_STICK_SW)</code>) 읽어 Low 횟수 누적, 10회 후 8회 이상이면 삽입 횟수 +1 → STICK_INSERT, 아니면 IDLE(Halt). GATE 단계 삭제</td><td>D1</td></tr>
+<tr><td>M4</td><td><code>:323</code> <code>s_StepStickInsert()</code></td><td>애니메이션 시작 + 9회 측정 → 결과 미완료면 STICK_REMOVE → 튜닝</td><td>4회 측정 → 측정 실패(ADC)는 별도 오류 코드 검토 → 튜닝 → 성공 시 애니메이션 시작 + 이탈 확인 시작 시각 설정</td><td>D2, D6</td></tr>
+<tr><td>M5</td><td><code>:428</code> <code>s_SleepAndCheckStick()</code></td><td>250ms 대기 + 6.25초 이탈 확인이 한 함수에 섞임</td><td>분리: ① <code>s_Sleep()</code> — 250ms 대기만 (시료 대기의 T/BT 1초 주기 유지용) ② <code>s_RemoveCheck()</code> — 500ms 이탈 확인. ②는 <code>APP_CTRL_Sequence_Process()</code>에서 STICK_INSERT(튜닝 후) ~ RESULT_SCAN 단계일 때 호출</td><td>D6</td></tr>
+<tr><td>M6</td><td><code>:510</code> <code>wStickStart</code> 초기화</td><td>시료 대기 진입 시 "즉시 확인"되도록 설정</td><td>튜닝 성공 시점(M4)으로 이동</td><td>D6</td></tr>
+<tr><td>M7</td><td>측정 단계 <code>SEQ_PH_START_CHANNEL</code> / <code>SEQ_PH_CHANNEL</code> (:543, :628, :720)</td><td>—</td><td>이 단계에서는 <code>s_RemoveCheck()</code>가 새 측정을 시작하지 않음. 이미 시작된 이탈 확인이 있으면 끝날 때까지 시퀀스 측정 시작이 <code>RET_BUSY</code>로 재시도됨(최대 약 25ms 지연)</td><td>D7</td></tr>
+<tr><td>M8</td><td>이탈 시 오류 코드 (<code>:517</code>, <code>:621</code>, <code>:698</code>)</td><td>시료 대기 = STICK_REMOVE, 이후 = STICK_FAIL</td><td>매핑 유지 + 새 구간(애니메이션 중, 결과 측정 중) 코드 결정 필요 (7장 Q4)</td><td>D6</td></tr>
+<tr class="section"><td colspan="5">APP_EXEC_Measure.c / .h</td></tr>
+<tr><td>M9</td><td><code>:113</code> <code>StartInitial()</code>, <code>:204-241</code> INITIAL 작업</td><td>CHECK → CHANNEL → … → FINAL, 9회</td><td>CHANNEL만 4회(C → BC → BT → T). <code>Meas_Phase</code> 열거형과 <code>bScaled</code> 필드 삭제</td><td>D2</td></tr>
+<tr><td>M10</td><td><code>:74</code> <code>s_JudgeStick()</code>, <code>:138</code> <code>StartStickCheck(bScaled)</code></td><td>원시값 2600 / 게인 적용 556 두 갈래</td><td>게인 적용값 한 갈래, <code>&lt; 556</code>이면 이탈(기존 비교 그대로). 인자 삭제(헤더 <code>.h:78</code> 및 주석 <code>.h:21-22</code> 수정)</td><td>D5</td></tr>
+<tr class="section"><td colspan="5">APP_DATA_Config.h</td></tr>
+<tr><td>M11</td><td><code>:43</code> <code>APP_OPTIC_STICK_THRESHOLD_RAW</code></td><td>2600</td><td>삭제</td><td>D1</td></tr>
+<tr><td>M12</td><td><code>:44</code> <code>APP_OPTIC_STICK_THRESHOLD_SCALED</code></td><td>556, <code>&lt;</code> 비교</td><td>값·비교 유지 (556, <code>&lt;</code>). 원시값 기준이 없어지므로 이름을 <code>APP_OPTIC_STICK_THRESHOLD</code>로 단순화 검토</td><td>D5</td></tr>
+<tr><td>M13</td><td><code>:92-93</code> <code>APP_STICK_CHECK_INTERVAL_TK</code> / <code>INTENDED_TK</code></td><td>6250ms / 250ms(대기 단위로 사용)</td><td>이탈 주기 500ms 신설, 250ms는 <code>APP_SLEEP_UNIT_TK</code> 등 실제 용도 이름으로 변경. 6.25초 유지 사유 주석(:79-91)은 변경 이력으로 정리</td><td>D6</td></tr>
+<tr><td>M14</td><td>신규 상수</td><td>—</td><td>채터링: 샘플 간격 10ms, 샘플 수 10, 통과 기준 8</td><td>D1</td></tr>
+<tr class="section"><td colspan="5">APP_DATA_Record.c</td></tr>
+<tr><td>M15</td><td><code>:245</code> <code>UpdateWakeFail()</code>, EEPROM 248~251</td><td>GATE 실패 C 값 min/max 기록 (max가 0xFFFF로 고정되는 문제 있음)</td><td>호출부가 없어짐. 채터링 실패 횟수 기록 등으로 용도 변경할지, 사용 안 함으로 둘지 결정 (7장 Q6). 덤프 형식(PC 파서)은 유지</td><td>D1</td></tr>
+</tbody></table></div>
+
+<h3>플래시 영향 (여유 약 60 byte: 8,132 / 8,192)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>변경</th><th>증감</th></tr></thead>
+<tbody>
+<tr><td>GATE 단계, 2600 판정 분기, QC 분기, <code>s_InitialOpticError</code>, <code>IsQcCycle</code> 삭제</td><td class="ok">감소</td></tr>
+<tr><td>초기 측정 CHECK/FINAL 단계 삭제, <code>bScaled</code> 삭제</td><td class="ok">감소</td></tr>
+<tr><td><code>UpdateWakeFail</code> 미사용 시 (링커가 제거)</td><td class="ok">감소</td></tr>
+<tr><td>채터링 확인 루프</td><td class="ng">증가</td></tr>
+<tr><td>이탈 확인 함수 분리, 단계 범위 판정, 측정 단계 차단</td><td class="ng">증가</td></tr>
+</tbody></table></div>
+<p>삭제분이 더 커서 여유 안에 들어갈 가능성이 높음 <span class="tag guess">추정</span>. 수정 후 <code>EWSTM8/Debug/List/MFx_Layered.map</code>으로 확인.</p>
+
+<h2>6. 상세 설계 검토</h2>
+<h3>6-1. 채터링 확인 (D1)</h3>
+<ul>
+  <li>기상 원인은 EXTI1(PB1 하강 엣지) 하나뿐 <span class="tag fact">사실</span> (<code>HW_PWR_PrepareHalt()</code>에서 TIM4·ADC1·USART1 클럭 차단). 기상 후 <code>HW_GPIO_Init()</code>(:256)에서 PB1이 풀업 입력으로 돌아오므로 바로 읽을 수 있음.</li>
+  <li>틱은 9.984ms (<code>HW_Tick_Drive.h:8</code>) → 10회 ≈ 100ms. 기존 SETTLE 10ms 대기는 첫 샘플 간격으로 흡수.</li>
+  <li>8/10 기준: 삽입 순간 접점이 몇 번 튀어도 통과, 노이즈 펄스(수 ms)로 깨어난 경우는 대부분 High로 읽혀 실패 <span class="tag guess">추정</span>. 기구 접촉이 불안정한 실물에서 정상 삽입이 실패하는 비율을 실측해야 함.</li>
+  <li>채터링 실패는 오류 표시 없이 Halt. 기록이 남지 않으므로 필요하면 실패 횟수만 EEPROM에 남김 (M15).</li>
+</ul>
+
+<h3>6-2. 이탈 확인 (D5~D7)</h3>
+<ul>
+  <li>측정 모듈은 한 번에 작업 하나만 처리(<code>s_meas.tJob</code>) <span class="tag fact">사실</span>. 이탈 확인 시작이 시퀀스 측정과 겹치면 <code>RET_BUSY</code>.</li>
+  <li>D7 구현 방식: 시퀀스가 측정 단계(START_CHANNEL/CHANNEL)면 이탈 확인을 시작하지 않고, 측정이 끝난 다음 기회에 바로 확인. 결과적으로 결과 측정(4채널, 약 0.1초) 직후 1회 확인 효과가 있음.</li>
+  <li>이탈 확인 측정 1회 = LED 20ms + 변환 약 5ms ≈ 25ms. 500ms 주기면 시퀀스 측정이 최대 약 25ms 늦어질 수 있으나 판정에 영향 없음 <span class="tag guess">추정</span>.</li>
+  <li>이탈 확인 결과도 <code>GetResult() == DONE</code>일 때만 판정에 사용해야 함. ADC 실패면 이전 값으로 "있음" 유지되는 문제(B4)가 남음 → 실패 시 다음 주기 재확인 또는 광학 오류 처리 중 선택.</li>
+  <li>시료 대기의 T/BT 비율 판정(1초 주기)과 이탈 확인(500ms)이 겹치므로, 스틱이 빠졌을 때 비율 판정보다 이탈 확인이 먼저 걸릴 가능성이 높아짐 → "이탈을 시료 도달로 오판"하는 경우가 줄어듦 <span class="tag guess">추정</span>.</li>
+</ul>
+
+<h3>6-3. 소모 전류 <span class="tag guess">추정</span></h3>
+<div class="table-wrap"><table>
+<p><b>LED 전류</b> (개정 2026-11-09): 처음에는 코드 주석(<code>Optic.h:28</code>, <code>Optic.c:68/185/205</code>)의 "20 mA"를 썼으나 회로상 불가능한 값이라 정정함.
+I = (VCC 2.5V − LED Vf − MCU 출력 Low 전압) / R13 510Ω → Vf = 0V라도 최대 4.9mA.
+LED는 <code>FC-1608UGK-520D26</code>(520nm 녹색, InGaN 계열로 추정, Vf가 높음)이라 2.5V 구동 시 Vf ≈ 2.3~2.4V → <b>약 0.1~0.4mA</b> <span class="tag guess">추정</span>. 실측: 측정 중 R13 양단 전압 / 510Ω.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>주기</th><th>LED 듀티 (25ms)</th><th>평균 추가 LED 전류 (0.1~0.4mA 기준)</th><th>검사 1회 (약 4분) 추가 소모</th></tr></thead>
+<tbody>
+<tr><td>6.25초 (현재)</td><td>0.4%</td><td>약 0.4~1.6µA</td><td>약 0.0001mAh 이하</td></tr>
+<tr class="changed"><td>500ms (변경)</td><td>5%</td><td>약 5~20µA</td><td>약 0.0003~0.0013mAh</td></tr>
+</tbody></table></div>
+<p>LED 전류 기준으로는 주기를 줄여도 전류 부담이 사실상 없음. 측정 중 ADC 동작 전류(데이터시트 확인 필요)는 포함하지 않았으며, 검사 중에는 MCU가 계속 동작하므로 MCU 동작 전류는 주기와 무관함.</p>
+<p>대기(Halt) 전류 71µA(2026-10-30, 12번 기기, PPK2)에는 영향 없음. 기상 1회당 측정이 C 1회(현재)에서 0회로 줄고 PB1 읽기 10회로 바뀜.</p>
+
+<h3>6-4. 기존 문제 목록(Work 추가 기록 3)과의 관계</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>문제</th><th>이번 변경 후</th></tr></thead>
+<tbody>
+<tr class="changed"><td>A1 2600 &gt; 튜닝 하한 1500</td><td class="ok">해결 (2600 삭제)</td></tr>
+<tr><td>A2 하한 1500 &gt; 분포 하한 1000</td><td>남음 (D3에서 유지) — Q3</td></tr>
+<tr class="changed"><td>A3 원시값 2600 vs 게인 적용 556 기준 불일치</td><td class="ok">해결 (게인 적용 556 하나)</td></tr>
+<tr><td>A4 포토TR 포화 미검출</td><td>남음</td></tr>
+<tr class="changed"><td>B1 SETTLE 반환값 미확인 / B2 GATE 결과 미확인</td><td class="ok">해결 (GATE 삭제)</td></tr>
+<tr><td>B3 초기 측정 ADC 실패 → STICK_REMOVE 오기록</td><td>M4에서 처리 (C 확인이 없어지므로 실패 = ADC 실패만 남음)</td></tr>
+<tr><td>B4 이탈 확인 ADC 실패 시 이전 값 유지</td><td>남음 — 6-2 참고</td></tr>
+<tr><td>B5~B8 측정 실패 0 값으로 진행 (시료 도달 오판, 오류 없는 음성 등)</td><td>남음 (별도 수정 필요)</td></tr>
+<tr class="changed"><td>이탈 확인 6.25초 공백</td><td class="ok">해결 (500ms, 결과 측정까지)</td></tr>
+</tbody></table></div>
+
+<h2>7. 결정·확인이 필요한 사항</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>항목</th><th>내용</th><th>방법</th></tr></thead>
+<tbody>
+<tr><td>Q1</td><td>556 여유 재확인</td><td>기준은 기존 556(46%) 유지로 결정(750은 위험하다고 판단해 철회). 다만 확인 횟수가 6.25초 → 500ms로 약 12배 늘어 노이즈로 한 번 기준 아래로 내려갈 기회도 늘어남. 젖은 스틱 C 최저값이 46%보다 충분히 높은지 확인</td><td>기기·스틱별 반응 중 C 게인 적용값 기록 (음성·양성·고농도)</td></tr>
+<tr class="diff"><td>Q2</td><td>스틱 없음 C 값</td><td>스틱을 뺐을 때 C가 이탈 기준(원시값 695~1794) 아래로 확실히 떨어지는지. 외부광 영향 포함</td><td>스틱 없음 상태 C 원시값, 밝은 곳·어두운 곳</td></tr>
+<tr><td>Q3</td><td>범위 하한 1500</td><td>센서 분포 1000~3200 중 1000~1500 기기는 항상 BOOK. 유지할지</td><td>생산 기기 초기 C 분포 (QC <code>M</code> 덤프 <code>StickPtr</code>)</td></tr>
+<tr><td>Q4</td><td>새 구간 이탈 오류 코드</td><td>삽입 애니메이션 중, 결과 측정 중 이탈 시 STICK_REMOVE(BOOK + DROP 깜빡임)와 STICK_FAIL(BOOK) 중 무엇으로 할지</td><td>결정</td></tr>
+<tr><td>Q5</td><td>초기 측정 ADC 실패 코드</td><td>C 확인이 없어져 실패 원인은 ADC뿐. 기존처럼 STICK_REMOVE로 둘지, OPTIC_FAIL 계열로 바꿀지</td><td>결정</td></tr>
+<tr><td>Q6</td><td>EEPROM 248~251 (WakeFail)</td><td>채터링 실패 횟수로 용도 변경 / 사용 안 함</td><td>결정 (PC 덤프 파서 영향 확인)</td></tr>
+<tr><td>Q7</td><td>채터링 기준 실물 검증</td><td>기구 접촉 불안정 기기에서 정상 삽입이 8/10을 통과하는지</td><td>삽입 반복 시험 + PB1 파형 측정</td></tr>
+</tbody></table></div>
+
+<h2>8. 수정 후 시험 항목</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>시험</th><th>기대 결과</th></tr></thead>
+<tbody>
+<tr><td>T1</td><td>스틱 정상 삽입 반복 (기구 불량 기기 포함)</td><td>채터링 통과 → 애니메이션 시작</td></tr>
+<tr><td>T2</td><td>PB1에 짧은 노이즈 펄스 인가 (수 ms)</td><td>표시 없이 Halt 복귀</td></tr>
+<tr><td>T3</td><td>C 원시값 1500 미만 / 3900 초과 조건 (센서 가림·직접광)</td><td>삽입 횟수와 관계없이 BOOK</td></tr>
+<tr><td>T4</td><td>애니메이션·시료 대기·과다·소량·반응 대기·결과 측정 각 구간에서 스틱 제거</td><td>약 0.5~0.55초 안에 해당 오류 표시</td></tr>
+<tr><td>T5</td><td>정상 검사 완주 (음성·양성·고농도 시료)</td><td>이탈 오판 없음, 결과 기존과 동일</td></tr>
+<tr><td>T6</td><td>검사 중 전류 (PPK2)</td><td>500ms마다 약 25ms LED 펄스(0.1~0.4mA 추정, R13 전압으로 실측 확인), Halt 전류 71µA 유지</td></tr>
+<tr><td>T7</td><td>빌드 map</td><td>8,192 byte 이내</td></tr>
+<tr><td>T8</td><td>QC 명령 M/R/Q</td><td>덤프 형식 변화 없음</td></tr>
+</tbody></table></div>
+
+<footer>근거: MFx_Layered/User/03_App (APP_CTRL_Sequence.c, APP_EXEC_Measure.c/.h, APP_DATA_Config.h, APP_DATA_Record.c), 01_HW_Drive (HW_GPIO_Drive.c/.h, HW_PWR_Drive.c, HW_Tick_Drive.h), 02_Module/Optic.h, EWSTM8/Debug/List/MFx_Layered.map · 관련 기록: Work_2026-11-09_HW_FW_핀맵_대조.html [추가 기록 3·4] · 작성 2026-11-09</footer>
+</main>
+</body>
+</html>
