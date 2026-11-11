@@ -65,13 +65,18 @@
 /* First guess: the curve starts as a straight line of slope S / tau, so
    tau x 1200 / S is a little short of the target, and each correction
    t x 1200 / reading closes in from below without overshooting (the curve
-   bends down). tau = 2.2 ms is 1467 loops of 1.5 us. Simulated: S 3900
-   needs 3 readings, S 1500 needs 6. */
-#define APP_OPTIC_TAU_LOOPS              1467u
+   bends down). The parts give tau = 2.2 ms = 1467 loops; measured on 12호기
+   (2026-11-11) it is about 2750 loops on bright channels and 3300..3500 on
+   dim ones, so the charge is about twice as slow as the parts say. Only the
+   first guess uses this: 12호기 still needs 3 readings either way. */
+#define APP_OPTIC_TAU_LOOPS              2750u
 #define APP_OPTIC_TUNE_TRIES               10u
-/* About 9 ms, four time constants: nothing inside the acceptance window
-   needs this long, it only stops a runaway. */
-#define APP_OPTIC_TIME_MAX_LOOPS         6000u
+/* Stops a runaway. Sized from the measured charge: a channel at the bottom
+   of the acceptance window (S 1500) needs 1200 / 1500 = 80 % of its steady
+   level, about 1.6 tau = 6,100..6,200 loops, more than the 6000 first used.
+   10000 loops is about 15 ms with interrupts masked: one 10 ms tick can be
+   lost, which the test timing (seconds) does not notice. (2026-11-11) */
+#define APP_OPTIC_TIME_MAX_LOOPS        10000u
 
 /* Line intensity thresholds -------------------------------------------------*/
 #define APP_T_LINE_THRESHOLD             1080u   /* old _nT_LINE_INT_THRESHOLD */
