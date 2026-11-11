@@ -578,8 +578,14 @@ static Ret_t s_SaveResult(void)
 #if (APP_TEST_MINLOG == 1)
     /* T's slot carries the switch figure: the removal design needs BT, BC
        and C, and the dump has only four free words that it shows. */
-    s_seq.awTestMin[OPTIC_CH_T] = s_seq.wTestRunMax;
-    (void)APP_DATA_Record_SetQcRef(s_seq.awTestMin);
+    /* A run that never reached the logging window (an early error, or the
+       used stick put back in to wake the unit for the dump) must not wipe
+       the figures of the run before it (2026-11-11, 물책 1번). */
+    if (s_seq.awTestMin[OPTIC_CH_C] != 0xFFFFu)
+    {
+        s_seq.awTestMin[OPTIC_CH_T] = s_seq.wTestRunMax;
+        (void)APP_DATA_Record_SetQcRef(s_seq.awTestMin);
+    }
 #endif
     /* The record format stores the step in the high byte. */
     awRecord[bIndex] = (uint16_t)(((uint16_t)s_seq.bErrorStep << 8u)
