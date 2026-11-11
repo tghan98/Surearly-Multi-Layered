@@ -31,9 +31,13 @@ Ret_t HW_ADC_Init(void)
     ADC_Init(ADC1, ADC_ConversionMode_Single, ADC_Resolution_12Bit,
              ADC_Prescaler_1);
 
-    /* 384 cycles: the 100 kohm source needs a long sampling window. */
+    /* 16 cycles (8 us), as the old alpha.2 FW. The reading is now taken
+       while the 22 nF node is still charging, so the moment the sample is
+       held must be short and early; the 22 nF itself supplies the sampling
+       capacitor's charge, so the 100 kohm source does not need a long
+       window. (hs.kim Optic_Solution v1.2, 4 and 5-6, 2026-11-11) */
     ADC_SamplingTimeConfig(ADC1, ADC_Group_SlowChannels,
-                           ADC_SamplingTime_384Cycles);
+                           ADC_SamplingTime_16Cycles);
 
     /* Schmitt triggers off on the three sensor inputs, as the old FW did
        (alpha.2 BSP_HW_Config.c): an analog level near the threshold keeps
@@ -70,15 +74,8 @@ Ret_t HW_ADC_Disable(void)
     return RET_OK;
 }
 
-Ret_t HW_ADC_Read(HW_ADC_Id tId, uint16_t *p_wOut)
+Ret_t HW_ADC_Select(HW_ADC_Id tId)
 {
-    uint16_t wStart;
-    Ret_t    tRet = RET_TIMEOUT;
-
-    if (p_wOut == NULL)
-    {
-        return RET_ERR_NULL;
-    }
     if ((uint8_t)tId >= (uint8_t)HW_ADC_COUNT)
     {
         return RET_ERR_PARAM;
@@ -89,7 +86,19 @@ Ret_t HW_ADC_Read(HW_ADC_Id tId, uint16_t *p_wOut)
     }
 
     ADC_ChannelCmd(ADC1, s_map[tId], ENABLE);
+
+    return RET_OK;
+}
+
+void HW_ADC_Start(void)
+{
     ADC_SoftwareStartConv(ADC1);
+}
+
+Ret_t HW_ADC_Fetch(HW_ADC_Id tId, uint16_t *p_wOut)
+{
+    uint16_t wStart;
+    Ret_t    tRet = RET_TIMEOUT;
 
     wStart = HW_Tick_Get();
     while (HW_Tick_Elapsed(wStart) <= HW_ADC_CONV_TIMEOUT_TK)
@@ -107,6 +116,20 @@ Ret_t HW_ADC_Read(HW_ADC_Id tId, uint16_t *p_wOut)
     ADC_ChannelCmd(ADC1, s_map[tId], DISABLE);
 
     return tRet;
+}
+
+Ret_t HW_ADC_Read(HW_ADC_Id tId, uint16_t *p_wOut)
+{
+    Ret_t tRet;
+
+    tRet = HW_ADC_Select(tId);
+    if (tRet != RET_OK)
+    {
+        return tRet;
+    }
+    HW_ADC_Start();
+
+    return HW_ADC_Fetch(tId, p_wOut);
 }
 
 /*****************************END OF FILE****/

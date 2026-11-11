@@ -891,6 +891,9 @@
                 <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_CLK_Drive.c</name>
             </file>
             <file>
+                <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_Cpu_Drive.s</name>
+            </file>
+            <file>
                 <name>$PROJ_DIR$\..\User\01_HW_Drive\HW_EEPROM_Drive.c</name>
             </file>
             <file>

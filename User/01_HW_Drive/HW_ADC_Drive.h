@@ -11,8 +11,15 @@
   *   PB5 -> ADC_Channel_13 (Q1, front)
   *   PB6 -> ADC_Channel_12 (Q2, middle)
   *   PB7 -> ADC_Channel_11 (Q3, rear)
-  *   12-bit single conversion, 384-cycle sampling window (the 100 kohm source
-  *   needs a long window).
+  *   12-bit single conversion, 16-cycle sampling window (8 us). The node is
+  *   read while it is still charging, so the hold must come early and at a
+  *   fixed moment; the 22 nF supplies the sampling capacitor (2026-11-11).
+  *
+  * A conversion comes in three calls so that the caller can switch an LED on
+  * and run a timed delay between Select and Start with interrupts masked,
+  * and unmask them before Fetch, whose timeout runs on the tick interrupt:
+  *   HW_ADC_Select -> [LED on, delay] -> HW_ADC_Start -> [unmask] -> HW_ADC_Fetch
+  * HW_ADC_Read does all three at once.
   *
   * Responsibility boundary: one conversion, raw counts out. Gain, thresholds,
   * averaging and stick-present judgement all belong to the Module and App.
@@ -46,8 +53,8 @@ typedef enum
 } HW_ADC_Id;
 
 /* Exported constants --------------------------------------------------------*/
-/* One conversion takes about 198 us at 384 cycles / 2 MHz. The bound is in
-   whole ms because the tick is 1 ms (spec §10: a ms timeout is at least 2). */
+/* One conversion takes about 14 us at 16 + 12 cycles / 2 MHz. The bound is
+   in whole ticks (spec §10: a timeout is at least 2 ticks). */
 #define HW_ADC_CONV_TIMEOUT_TK   HW_TICK_WAIT_MS(2u)
 
 /* API -----------------------------------------------------------------------*/
@@ -84,6 +91,33 @@ Ret_t HW_ADC_Disable(void);
   * @retval RET_OK, RET_ERR_NULL, RET_ERR_PARAM, RET_ERR_NOT_INIT, RET_TIMEOUT
   */
 Ret_t HW_ADC_Read(HW_ADC_Id tId, uint16_t *p_wOut);
+
+/**
+  * @brief  Connects one channel to the converter, ready for HW_ADC_Start().
+  * @param  tId : channel to convert
+  * @note   Layer: HW Driver. Blocking: no. ISR: no.
+  * @retval RET_OK, RET_ERR_PARAM, RET_ERR_NOT_INIT
+  */
+Ret_t HW_ADC_Select(HW_ADC_Id tId);
+
+/**
+  * @brief  Starts the conversion. The input is held at the end of the
+  *         16-cycle sampling window, so an interrupt after this call no
+  *         longer moves the reading.
+  * @note   Layer: HW Driver. Blocking: no. Call only after HW_ADC_Select().
+  */
+void HW_ADC_Start(void);
+
+/**
+  * @brief  Waits for the conversion, returns the count and disconnects the
+  *         channel. Interrupts must be enabled: the timeout runs on the tick.
+  * @param  tId    : the channel given to HW_ADC_Select()
+  * @param  p_wOut : destination, must not be NULL. Untouched on failure.
+  * @note   Layer: HW Driver. Blocking: yes, bounded by
+  *         HW_ADC_CONV_TIMEOUT_TK. ISR: no.
+  * @retval RET_OK, RET_TIMEOUT
+  */
+Ret_t HW_ADC_Fetch(HW_ADC_Id tId, uint16_t *p_wOut);
 
 #endif /* __HW_ADC_DRIVE_H__ */
 /*****************************END OF FILE****/
