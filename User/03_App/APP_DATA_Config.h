@@ -95,6 +95,22 @@
    floor. */
 #define APP_STICK_CHECK_INTERVAL_TK  HW_TICK_MS(500u)
 
+/* Test build: worst-case log (2026-11-11, hs.kim). 1 builds a test FW that
+   does NOT end a run on stick removal. Instead, from the end of gain tuning
+   to the result scan, it reads one channel every 250 ms in turn and keeps
+   the lowest gain-applied value of each, and it reads the stick switch on
+   every 10 ms pass and keeps its longest open stretch. They are stored
+   when the run ends and read with the ordinary dump, in the QC reference
+   field, which means something else in the product:
+     QC T                 : longest switch-open stretch, 10 ms units
+     QC BT / QC BC / QC C : lowest BT / BC / C (gain applied) during the run
+   Purpose: see how dark each channel gets while the colour develops, and
+   whether the switch drops out with the stick in. Keep 0 for production. */
+#ifndef APP_TEST_MINLOG
+#define APP_TEST_MINLOG                     0
+#endif
+#define APP_TEST_MINLOG_TK           HW_TICK_MS(250u)
+
 /* Pace of the waiting loops: one legacy "sleep" of 250 ms. The sample-load
    wait takes one T/BT pair every four of them, as the old FW did. */
 #define APP_SEQ_SLEEP_TK             HW_TICK_MS(250u)

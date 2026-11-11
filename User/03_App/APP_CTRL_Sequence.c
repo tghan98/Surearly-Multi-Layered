@@ -77,6 +77,12 @@ typedef struct
     uint8_t                bChecking;
     uint8_t                bChannel;
     uint8_t                bSleeps;
+#if (APP_TEST_MINLOG == 1)
+    uint16_t               awTestMin[OPTIC_CH_COUNT]; /* lowest, gain applied */
+    uint16_t               wTestRun;     /* current switch-open stretch    */
+    uint16_t               wTestRunMax;  /* longest stretch                */
+    uint8_t                bTestCh;      /* channel the next read takes    */
+#endif
     uint8_t                bSwReads;     /* switch reads taken after wake  */
     uint8_t                bSwLow;       /* of those, reads that were low  */
 } Seq_Ctx;
@@ -202,6 +208,15 @@ static void s_ClearRun(void)
     s_seq.tError     = APP_ERR_NONE;
     s_seq.bErrorStep = 0u;
     s_seq.bChecking  = 0u;
+#if (APP_TEST_MINLOG == 1)
+    for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
+    {
+        s_seq.awTestMin[bCh] = 0xFFFFu;
+    }
+    s_seq.wTestRun    = 0u;
+    s_seq.wTestRunMax = 0u;
+    s_seq.bTestCh     = 0u;
+#endif
 
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
@@ -339,10 +354,12 @@ static void s_StepStickInsert(void)
                was never written and reads zero, so TuneGain() below reports
                OPTIC_FAIL on that very channel. */
             (void)APP_DATA_Record_SetStickPtr(APP_EXEC_Measure_GetInitial());
+#if (APP_TEST_MINLOG == 0)
             if (APP_DATA_Record_GetInsertCount() <= (uint8_t)SEQ_QC_REF_INSERTS)
             {
                 (void)APP_DATA_Record_SetQcRef(APP_EXEC_Measure_GetInitial());
             }
+#endif
 
             /* Acceptance window and gain in one call: both walk the same four
                readings and fail on the same channel number. */
@@ -432,6 +449,9 @@ static void s_RemoveCheck(void)
 {
     uint8_t            bActive;
     APP_DATA_ErrorCode tErr = APP_ERR_STICK_FAIL;
+#if (APP_TEST_MINLOG == 1)
+    uint16_t           wTest;
+#endif
 
     switch (s_seq.tStep)
     {
@@ -456,6 +476,56 @@ static void s_RemoveCheck(void)
             break;
     }
 
+#if (APP_TEST_MINLOG == 1)
+    /* Test build: log, never end the run. The switch is read on every pass
+       from the end of tuning to the result scan; high means open. */
+    (void)tErr;
+    if ((bActive != 0u)
+        || ((s_seq.tStep >= APP_SEQ_SAMPLE_LOAD_WAIT)
+            && (s_seq.tStep <= APP_SEQ_RESULT_SCAN)))
+    {
+        if (HW_GPIO_Read(HW_GPIO_STICK_SW) != HW_GPIO_LEVEL_LOW)
+        {
+            s_seq.wTestRun++;
+            if (s_seq.wTestRun > s_seq.wTestRunMax)
+            {
+                s_seq.wTestRunMax = s_seq.wTestRun;
+            }
+        }
+        else
+        {
+            s_seq.wTestRun = 0u;
+        }
+    }
+
+    if (s_seq.bChecking != 0u)
+    {
+        if (APP_EXEC_Measure_IsBusy() != 0u)
+        {
+            return;
+        }
+        s_seq.bChecking = 0u;
+        wTest = Optic_GetScaled((Optic_Ch)s_seq.bTestCh);
+        if (wTest < s_seq.awTestMin[s_seq.bTestCh])
+        {
+            s_seq.awTestMin[s_seq.bTestCh] = wTest;
+        }
+        s_seq.bTestCh = (uint8_t)((s_seq.bTestCh + 1u)
+                                  & (uint8_t)(OPTIC_CH_COUNT - 1u));
+        return;
+    }
+
+    if ((bActive == 0u)
+        || (HW_Tick_Elapsed(s_seq.wStickStart) < APP_TEST_MINLOG_TK))
+    {
+        return;
+    }
+    if (APP_EXEC_Measure_StartSingle((Optic_Ch)s_seq.bTestCh) == RET_OK)
+    {
+        s_seq.wStickStart = HW_Tick_Get();
+        s_seq.bChecking   = 1u;
+    }
+#else
     if (s_seq.bChecking != 0u)
     {
         if (APP_EXEC_Measure_IsBusy() != 0u)
@@ -480,6 +550,7 @@ static void s_RemoveCheck(void)
         s_seq.wStickStart = HW_Tick_Get();
         s_seq.bChecking   = 1u;
     }
+#endif
 }
 
 static Ret_t s_SaveResult(void)
@@ -504,6 +575,12 @@ static Ret_t s_SaveResult(void)
     {
         awRecord[bIndex++] = s_seq.awResult[bCh];
     }
+#if (APP_TEST_MINLOG == 1)
+    /* T's slot carries the switch figure: the removal design needs BT, BC
+       and C, and the dump has only four free words that it shows. */
+    s_seq.awTestMin[OPTIC_CH_T] = s_seq.wTestRunMax;
+    (void)APP_DATA_Record_SetQcRef(s_seq.awTestMin);
+#endif
     /* The record format stores the step in the high byte. */
     awRecord[bIndex] = (uint16_t)(((uint16_t)s_seq.bErrorStep << 8u)
                                 | (uint8_t)s_seq.tError);
