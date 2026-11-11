@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optic 측정 비교</title>
+<style>
+:root { --bg:#f7f8fa; --panel:#fff; --border:#d8dce2; --header-bg:#1f2d3d; --header-fg:#fff; --section-bg:#e8edf5;
+  --note-bg:#fff8e1; --note-fg:#6b5900; --warn-bg:#fff1f0; --warn-fg:#8c1d18; --new-bg:#eafaf0; --ok-fg:#14683c;
+  --accent:#2f6fed; --v211:#c2410c; --lay:#2f6fed; --text:#23292f; --muted:#6b7480; --code-bg:#eef1f5; }
+* { box-sizing:border-box; }
+body { margin:0; padding:24px 16px; background:var(--bg); color:var(--text); font-family:"Segoe UI","Malgun Gothic",sans-serif; font-size:14px; line-height:1.55; }
+main { max-width:1120px; margin:0 auto; }
+h1 { font-size:20px; margin:0 0 4px; }
+h2 { font-size:16px; margin:30px 0 10px; border-left:4px solid var(--accent); padding-left:8px; }
+h3 { font-size:14px; margin:18px 0 6px; }
+.subtitle { color:var(--muted); font-size:13px; margin-bottom:16px; }
+.summary { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:8px; padding:12px 16px; }
+.note { background:var(--note-bg); color:var(--note-fg); border-radius:6px; padding:8px 12px; font-size:13px; margin:8px 0; }
+.warnbox { background:var(--warn-bg); color:var(--warn-fg); border-radius:8px; padding:10px 14px; font-size:13px; margin:8px 0; }
+.table-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow-x:auto; margin:8px 0; }
+table { border-collapse:collapse; width:100%; }
+thead th { background:var(--header-bg); color:var(--header-fg); text-align:left; padding:7px 10px; font-size:12.5px; white-space:nowrap; }
+tbody td { padding:6px 10px; border-top:1px solid var(--border); vertical-align:top; font-size:13px; }
+tr.section td { background:var(--section-bg); font-weight:700; }
+tr.diff td { background:var(--warn-bg); }
+tr.same td { background:var(--new-bg); }
+td.k { font-weight:600; white-space:nowrap; }
+code { font-family:Consolas,monospace; background:var(--code-bg); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+.tag { display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; font-weight:600; }
+.tag.fact { background:#d9f0e3; color:#14683c; } .tag.guess { background:#fff3cd; color:#7a5c00; }
+.tag.same { background:#d9f0e3; color:#14683c; } .tag.diff { background:#ffe0e0; color:#b3261e; } .tag.part { background:#fff3cd; color:#7a5c00; }
+.v211 { color:var(--v211); font-weight:700; } .lay { color:var(--lay); font-weight:700; }
+.figure { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px; margin:8px 0; }
+.figure svg { width:100%; height:auto; display:block; }
+.figure .cap { font-size:12px; color:var(--muted); margin-top:6px; }
+pre { background:#1f2d3d; color:#e6edf5; padding:12px 14px; border-radius:8px; overflow-x:auto; font-size:12px; line-height:1.45; }
+ul, ol { padding-left:22px; } li { margin:3px 0; }
+footer { margin-top:28px; color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Optic 측정 방법 비교 — MFx_v2.1.1_alpha.2 vs MFx_Layered</h1>
+<div class="subtitle">작성 2026-11-09 · 대상 HW: Surearly Multi v1.1 (OrCad-Surearly_Multi-v1.1-r1574, STM8L151F3) · 근거: 소스 코드 정적 분석 + 오브젝트 역어셈블 (실측 전)
+· <span class="tag fact">사실</span> 코드·문서에서 직접 확인 / <span class="tag guess">추정</span> 계산·해석 (실측 필요)</div>
+
+<h2>요약</h2>
+<div class="summary">
+<ul>
+  <li><b>광량 정규화 원리가 다름:</b> <span class="v211">v2.1.1</span>은 <b>LED On 시간</b>을 조절해 RC 필터 <b>충전 도중</b> 값을 3000에 맞추고, <span class="lay">MFx_Layered</span>는 20 ms <b>완전 안정</b> 후 값에 <b>디지털 게인</b>을 곱해 1200에 맞춤.</li>
+  <li><b>최종 결과식·판정 임계값은 동일:</b> T = Int(Int(BT<sub>f</sub>,BT<sub>e</sub>), Int(T<sub>f</sub>,T<sub>e</sub>)), T &gt; 1040 양성 / C &lt; 1050 오류. 비율 계산이라 게인은 상쇄 <span class="tag guess">추정</span>.</li>
+  <li><b>노이즈 필터:</b> v2.1.1 = 약 1 s 간격 5회 측정 중 가운데 3개 평균(시간축) / Layered = 4 ms 안 21회 변환 중 가운데 16개 평균(전기 노이즈만).</li>
+  <li><b>기능 차이:</b> Layered에는 시료 도달 판정의 BT_C 조건이 없고, 검사 중 스틱 제거 감지가 기계 스위치(즉시) 대신 광학(최대 6.25 s)임.</li>
+  <li><b>시간 차이:</b> v2.1.1 코드 계산상 반응 대기 약 68~84 s로 주석(165 s)·Layered(155 s)와 다름 <span class="tag guess">추정</span> → 실측 필요.</li>
+  <li><b>계보:</b> MFx_Layered의 기능 원본은 <code>MFx_New_Ver</code>이며 v2.1.1을 이식한 것이 아님 <span class="tag fact">사실</span> (설계서 §1 "기능 참조 원본 MFx_New_Ver", 목표광량 3000 ↔ 1200).</li>
+</ul>
+</div>
+
+<h2>1. 비교 대상과 근거 파일</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>구분</th><th>MFx_v2.1.1_alpha.2</th><th>MFx_Layered</th></tr></thead>
+<tbody>
+<tr><td class="k">빌드 범위</td><td><code>OVULATION_MULTI.ewp</code> 포함 파일만 (<code>src/funcs.c</code>, <code>testmode.c</code>, <code>accusense.h</code>는 미포함)</td><td><code>EWSTM8/MFx_Layered.ewp</code> (git f11f22b 기준)</td></tr>
+<tr><td class="k">측정 저수준</td><td><code>BSP/BSP_ADC.c</code> (<code>BSP_ADC_Converting_Data</code>), <code>BSP/BSP_LED.c</code>, <code>BSP/BSP_HW_Config.c</code> (<code>BSP_ADC_Config</code>, <code>BSP_SW_Delay</code>)</td><td><code>User/01_HW_Drive/HW_ADC_Drive.c</code>, <code>02_Module/Optic.c/.h</code></td></tr>
+<tr><td class="k">측정 절차</td><td><code>User_Apps/Apps_MainApplication.c</code> (<code>T_Scan</code>, <code>C_Scan</code>, <code>LED_AutoTunning</code>, <code>Apps_*Check</code>)</td><td><code>03_App/APP_EXEC_Measure.c</code>, <code>APP_CTRL_Sequence.c</code></td></tr>
+<tr><td class="k">사양 상수</td><td><code>src/Parameter_define.h</code>, <code>Apps_MainApplication.h</code></td><td><code>03_App/APP_DATA_Config.h</code></td></tr>
+</tbody></table></div>
+
+<h2>2. 광 채널 구성 (공통 HW)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>채널</th><th>LED (Active Low)</th><th>센서 / ADC</th><th>v2.1.1 변수</th><th>Layered 채널</th></tr></thead>
+<tbody>
+<tr><td class="k">T</td><td>PB3 nLED2 (v2.1.1 "FirstLED", LED4)</td><td>Q1 PTR1 PB5 / ADC_IN13 (FRNT)</td><td><code>T</code></td><td><code>OPTIC_CH_T</code></td></tr>
+<tr><td class="k">BT</td><td>PB3 nLED2</td><td>Q2 PTR2 PB6 / ADC_IN12 (MIDL)</td><td><code>BT_B</code></td><td><code>OPTIC_CH_BT</code></td></tr>
+<tr class="diff"><td class="k">BT_C</td><td>PB3 nLED2</td><td>Q3 PTR3 PB7 / ADC_IN11 (REAR)</td><td><code>BT_C</code> (T_Scan md=1)</td><td><b>없음</b></td></tr>
+<tr><td class="k">BC</td><td>PB4 nLED1 (v2.1.1 "SecondLED", LED5)</td><td>Q2 PTR2 PB6 / ADC_IN12 (MIDL)</td><td><code>BC</code></td><td><code>OPTIC_CH_BC</code></td></tr>
+<tr><td class="k">C</td><td>PB4 nLED1</td><td>Q3 PTR3 PB7 / ADC_IN11 (REAR)</td><td><code>C</code></td><td><code>OPTIC_CH_C</code></td></tr>
+</tbody></table></div>
+<p>센서 입력단: 포토TR 이미터 – 100kΩ/F 풀다운 – 22nF → τ = 2.2 ms. LED 애노드 공통 R13 510Ω. <span class="tag fact">사실</span> (DSN 추출, Optic.h "22 nF는 BOM으로 확인 2026-10-30")</p>
+
+<h2>3. 1회 측정(Scan) 방식</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th class="v211">MFx_v2.1.1_alpha.2</th><th class="lay">MFx_Layered</th><th>판정</th></tr></thead>
+<tbody>
+<tr class="diff"><td class="k">정규화 방식</td><td>LED On 시간(<code>LED_OnTime[]</code>, SW 지연 루프 횟수) 조절</td><td>LED 조건 고정, 디지털 게인 <code>raw × gain / 100</code></td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">ADC 읽는 시점</td><td>LED On → <code>BSP_SW_Delay(LED_OnTime)</code> 직후 = <b>RC 충전 중</b></td><td>LED On → 20 ms 대기(9τ, 99.99 %) = <b>안정 상태</b></td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">LED 1회 점등당 읽는 센서</td><td>T_Scan: MIDL(버림) → MIDL → FRNT (→ REAR) / C_Scan: MIDL(버림) → MIDL → REAR</td><td>채널 1개만 (채널마다 LED 별도 점등)</td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">채널당 변환 수</td><td><code>BSP_ADC_Converting_Data</code> 1회 = 변환 2회 중 2번째 사용 → 실질 1샘플</td><td>버림 1회 + 20회 → 삽입정렬 → 가운데 16개 평균 (<code>s_Burst</code>)</td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">ADC 샘플링 시간</td><td>16 cycles (<code>ADC_SamplingTime_16Cycles</code>)</td><td>384 cycles ("100 kohm source needs a long sampling window")</td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">슈미트 트리거</td><td>ADC_IN11~13 Disable (<code>ADC1-&gt;TRIGR</code>)</td><td>설정 없음</td><td><span class="tag diff">상이</span></td></tr>
+<tr><td class="k">해상도 / 모드</td><td>12bit, Single, Prescaler 1</td><td>12bit, Single, Prescaler 1</td><td><span class="tag same">동일</span></td></tr>
+<tr class="diff"><td class="k">시스템 클럭</td><td>HSI/16 = 1 MHz</td><td>HSI/8 = 2 MHz</td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">변환 대기</td><td>EOC 무한 대기 (타임아웃 없음)</td><td>tick 기반 타임아웃 → <code>OPTIC_ERR_ADC</code></td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">LED 점등 시간(1채널)</td><td>약 1~5 ms + 변환 시간 <span class="tag guess">추정</span></td><td>20 ms + 약 4.2 ms 버스트, 이후 10 ms 회복</td><td><span class="tag diff">상이</span></td></tr>
+</tbody></table></div>
+
+<h3>3-1. v2.1.1 LED On 시간 환산 <span class="tag guess">추정</span></h3>
+<p><code>Debug/Obj/BSP_HW_Config.o</code>를 IAR <code>ielfdumpstm8 --code</code>로 역어셈블한 <code>BSP_SW_Delay</code> 루프:</p>
+<pre>BSP_SW_Delay:
+  JRA   0x03
+  LDW   X, BSP_Dumy_Cnt     ; loop:
+  DECW  X
+  LDW   BSP_Dumy_Cnt, X
+  LDW   X, BSP_Dumy_Cnt
+  JRNE  0xF7                ; → loop
+  RET</pre>
+<ul>
+  <li>루프 1회 약 9 cycles → 1 MHz에서 <b>약 9 µs/count</b> (STM8 명령 사이클 합산, 파이프라인 영향 미포함).</li>
+  <li>튜닝 기준점: x1 = 100 count ≈ <b>0.9 ms</b> (≈0.41τ → 최종값의 약 34 %), x2 = 500 count ≈ <b>4.5 ms</b> (≈2.05τ → 약 87 %).</li>
+  <li>즉 v2.1.1은 지수 충전 곡선 위 두 점을 <b>직선 보간</b>(<code>Cal_Line_Coef</code>, <code>Cal_LED_Time</code>)해 3000이 되는 On 시간을 구함. 곡선이 위로 볼록하므로 계산된 시간에서 실제 값은 목표보다 다소 높게 나옴.</li>
+  <li>결과값이 C 편차(22nF 공차), HSI 클럭 오차, 코드 실행 순서(같은 점등 중 MIDL→FRNT 순으로 읽는 사이에도 충전 진행)에 직접 의존함.</li>
+</ul>
+
+<div class="figure">
+<svg viewBox="0 0 720 260" role="img" aria-label="센서 RC 충전 곡선과 두 FW의 ADC 읽기 시점">
+  <defs><style>
+    .ax{stroke:#6b7480;stroke-width:1} .grid{stroke:#d8dce2;stroke-width:1;stroke-dasharray:3 3}
+    .cv{fill:none;stroke:#23292f;stroke-width:2} .t{font:12px "Segoe UI","Malgun Gothic",sans-serif;fill:#23292f}
+    .m{font:11px "Segoe UI","Malgun Gothic",sans-serif;fill:#6b7480}
+  </style></defs>
+  <line class="ax" x1="60" y1="220" x2="700" y2="220"/><line class="ax" x1="60" y1="20" x2="60" y2="220"/>
+  <line class="grid" x1="60" y1="40" x2="700" y2="40"/>
+  <text class="m" x="20" y="44">100%</text><text class="m" x="34" y="224">0</text>
+  <!-- x scale: 0..22 ms -> 60..700 (29.09 px/ms); y: 0..1 -> 220..40 -->
+  <path class="cv" d="M60,220 L75,186 L89,156 L104,131 L118,111 L133,95 L147,82 L162,72 L176,64 L191,58 L205,53 L234,47 L264,44 L322,41 L409,40 L700,40"/>
+  <rect x="86" y="30" width="105" height="190" fill="#c2410c" opacity="0.10"/>
+  <line x1="86" y1="220" x2="86" y2="159" stroke="#c2410c" stroke-width="2"/><circle cx="86" cy="159" r="4" fill="#c2410c"/>
+  <line x1="191" y1="220" x2="191" y2="63" stroke="#c2410c" stroke-width="2"/><circle cx="191" cy="63" r="4" fill="#c2410c"/>
+  <text class="t" x="96" y="150" fill="#c2410c">0.9 ms ≈34%</text>
+  <text class="t" x="198" y="84" fill="#c2410c">4.5 ms ≈87%</text>
+  <text class="t" x="92" y="26" fill="#c2410c">v2.1.1 튜닝 범위 (충전 중)</text>
+  <line x1="642" y1="220" x2="642" y2="40" stroke="#2f6fed" stroke-width="2"/><circle cx="642" cy="40" r="4" fill="#2f6fed"/>
+  <text class="t" x="520" y="62" fill="#2f6fed">Layered 20 ms ≈99.99%</text>
+  <text class="m" x="60" y="240">0</text><text class="m" x="200" y="240">5</text><text class="m" x="345" y="240">10</text><text class="m" x="490" y="240">15</text><text class="m" x="636" y="240">20 ms</text>
+  <text class="m" x="250" y="256">LED On 후 경과 시간 (τ = 100kΩ × 22nF = 2.2 ms)</text>
+</svg>
+<div class="cap">센서 노드 전압의 정규화 충전 곡선 1−e<sup>−t/τ</sup>. v2.1.1은 곡선이 가파른 구간에서 읽어 시간 편차가 값 편차로 직결되고, Layered는 평탄 구간에서 읽는다. (v2.1.1 시간은 9 µs/count 추정 기준)</div>
+</div>
+
+<h2>4. 튜닝(광량 정규화) 비교</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th class="v211">v2.1.1 — <code>LED_AutoTunning</code></th><th class="lay">Layered — <code>APP_EXEC_Measure_TuneGain</code></th></tr></thead>
+<tbody>
+<tr><td class="k">목표값</td><td><code>_nTAGET_LIGHT</code> = 3000</td><td><code>APP_OPTIC_TARGET_LIGHT</code> = 1200 ± 25</td></tr>
+<tr><td class="k">기준 채널</td><td>C(LED1 쌍)와 T(LED2 쌍) 각각 → LED별 On 시간 2개</td><td>4채널 각각 → 채널별 게인 4개</td></tr>
+<tr><td class="k">방법</td><td>On 500 / 100 count에서 C·T 측정 → 직선식 → 3000 되는 시간</td><td>gain = round(1200 × 100 / raw)</td></tr>
+<tr><td class="k">사전 검사</td><td>500 count에서 BC·C·BT·T &lt; 100이면 Strip 오류</td><td>raw 1500~3900 밖이면 <code>APP_ERR_OPTIC_FAIL_CHn</code></td></tr>
+<tr><td class="k">사후 검사</td><td>튜닝 후 5회 측정 평균: Band 400~3800, Blank ≥ 300 (삽입 3회 미만은 QC 기준 500~3800, ≥ 400)</td><td>보정값 1175~1225 확인</td></tr>
+<tr><td class="k">측정 횟수</td><td>튜닝 4회 + 빈 스틱 10회 (각 사이 약 1 s LCD 대기)</td><td>빈 스틱 4채널 + 스틱 확인 5회 = 9회</td></tr>
+</tbody></table></div>
+
+<h2>5. 검사 시퀀스 비교</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>단계</th><th class="v211">v2.1.1</th><th class="lay">MFx_Layered</th><th>판정</th></tr></thead>
+<tbody>
+<tr class="diff"><td class="k">스틱 삽입/제거 감지</td><td>기계 스위치 PB1 (<code>BSP_StripCheck</code>), 매 루프 + TIM4 ISR(약 101 ms)에서 High 발생 시 <code>Stick_Ck</code> 래치</td><td>광학: C 채널 raw ≥ 2600(초기) / scaled ≥ 556(대기 중), 6.25 s 간격. PB1은 Halt 기상에만 사용</td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">빈 스틱(Empty) 측정</td><td>C_Scan 5회 + T_Scan 5회, 각각 정렬 후 가운데 3개 평균</td><td>4채널 1회씩(채널 사이에 스틱 확인 삽입)</td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">시료 도달 판정</td><td>T/BT_B &lt; Empty×90% <b>또는</b> T/BT_C &lt; Empty×90% (<code>_nEMPTY_BTB/BTC_RATIO</code>)</td><td>T/BT &lt; Empty×90% 만</td><td><span class="tag diff">상이</span></td></tr>
+<tr><td class="k">도달 대기 주기/한계</td><td>약 1 s 주기(LCD_Delay 9), 295회 ≈ 5 min</td><td>250 ms × 4 주기, 300 s</td><td><span class="tag part">유사</span></td></tr>
+<tr><td class="k">과다 시료</td><td>도달 시 C 측정 → 약 4.7 s 후 C &gt; 도달C×92%</td><td>도달 시 C 측정 → 5 s 후 C &gt; 도달C×92%</td><td><span class="tag same">동일 판정</span></td></tr>
+<tr class="diff"><td class="k">소량 시료</td><td>약 8~10 s 후 C &lt; EmptyC×120% <span class="tag guess">추정</span></td><td>20 s 후 C &lt; EmptyC×120%</td><td><span class="tag part">판정 동일, 시간 상이</span></td></tr>
+<tr class="diff"><td class="k">반응 대기</td><td>165 × Delay100mSec(4) ≈ 68~84 s + 더미 약 2 s <span class="tag guess">추정</span></td><td>155 s (전체 180 s, 2026-11-03 실기 확인)</td><td><span class="tag diff">상이</span></td></tr>
+<tr class="diff"><td class="k">최종(Finish) 측정</td><td>C_Scan 5회 + T_Scan 5회, 가운데 3개 평균 (약 0.5 s 간격)</td><td>C → BC → BT → T 각 1회 버스트</td><td><span class="tag diff">상이</span></td></tr>
+<tr class="same"><td class="k">결과 계산</td><td><code>CalculateIntensity</code> 4자리 나눗셈, T = Int(Int(BT<sub>f</sub>,BT<sub>e</sub>), Int(T<sub>f</sub>,T<sub>e</sub>)), C 동일 구조</td><td><code>APP_EXEC_Measure_Intensity</code> (같은 알고리즘, 16bit wrap 유지)</td><td><span class="tag same">동일</span></td></tr>
+<tr class="same"><td class="k">판정 임계</td><td>C &lt; 1050 → Strip 오류, T &gt; 1040 → 양성</td><td>C &lt; 1050 → 오류, T &gt; 1040 → 양성</td><td><span class="tag same">동일</span></td></tr>
+<tr class="same"><td class="k">사용 한도</td><td><code>_nSCAN_MAX_CNT</code> 30</td><td><code>APP_SCAN_MAX_COUNT</code> 30</td><td><span class="tag same">동일</span></td></tr>
+</tbody></table></div>
+
+<h3>5-1. v2.1.1 시간 계산 근거 <span class="tag guess">추정</span></h3>
+<ul>
+  <li>클럭: <code>BSP_MainClock_1MHz_Config</code> → <code>CLK-&gt;CKDIVR = CLK_SYSCLKDiv_16</code> → 1 MHz.</li>
+  <li>TIM4: <code>PSCR = TIM4_Prescaler_1024</code>, <code>ARR = 98</code> → 99 / (1 MHz/1024) = <b>101.4 ms/tick</b>, ISR에서 <code>g_dwTimerCnt++</code>.</li>
+  <li><code>BSP_Delay100mSec(n)</code>: <code>if (n &lt; 경과tick) break</code> → n+1 tick 도달 시 종료, 시작 위상에 따라 약 n~n+1 tick = n=4일 때 <b>0.41~0.51 s</b>.</li>
+  <li>반응 대기 165회 → 67~84 s, 소량 시료 대기 20회 → 8~10 s. 주석("165 sec wait", "20초 대기")과 약 2배 차이.</li>
+  <li>MFx_Layered 주석의 "one tick is 10 ms, the same unit the old FW counted"는 <code>MFx_New_Ver</code> 기준이며 v2.1.1과 무관.</li>
+</ul>
+
+<h2>6. 검토 의견</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>항목</th><th>내용</th><th>영향</th><th>제안</th></tr></thead>
+<tbody>
+<tr><td>1</td><td class="k">raw 값 호환성</td><td>v2.1.1 raw = 충전 중 값(목표 3000), Layered raw = 안정 값 × 게인(목표 1200). 같은 스틱이라도 raw는 다른 척도</td><td>raw 기준 임계(Band/Blank 한계, 스틱 판정 2600/556)를 상호 이식 불가</td><td>임계값은 각 FW 실측으로 별도 결정</td></tr>
+<tr><td>2</td><td class="k">최종 강도 호환성</td><td>결과는 Finish/Empty 비율의 비율 → 같은 점등 조건이면 게인·On시간 상쇄 <span class="tag guess">추정</span></td><td>T/C 강도(1040/1050 판정)는 비교 가능할 것으로 봄</td><td>동일 스틱·동일 기기로 두 FW 교차 측정해 T/C 강도 상관 확인</td></tr>
+<tr><td>3</td><td class="k">노이즈 필터</td><td>v2.1.1은 시간축 5회(가운데 3), Layered는 4 ms 내 21회(가운데 16)</td><td>시료 이동·기포 등 수백 ms 단위 변동은 Layered가 거르지 못함</td><td>Finish/Empty 측정에 수 회 반복 + 중간값 도입 검토</td></tr>
+<tr><td>4</td><td class="k">BT_C 조건 누락</td><td>Layered 시료 도달 판정에 REAR(LED2 점등) 비율 조건 없음</td><td>도달 감지 민감도 차이</td><td><code>MFx_New_Ver</code> 원본에 있는지 대조 후 결정</td></tr>
+<tr><td>5</td><td class="k">스틱 제거 감지</td><td>v2.1.1 기계식 ≈ 0.1 s, Layered 광학 최대 6.25 s</td><td>제거 후 오판정 가능 시간 증가</td><td>검사 중 PB1 상태 병행 확인 검토 (PB1 풀업 정리와 함께)</td></tr>
+<tr><td>6</td><td class="k">ADC 샘플링</td><td>v2.1.1 16 cycles는 100kΩ 소스에 짧음 <span class="tag guess">추정</span>, Layered 384 cycles 적정</td><td>v2.1.1 값에 샘플링 오차 포함 가능</td><td>v2.1.1을 기준값으로 쓰는 실험 시 고려</td></tr>
+<tr><td>7</td><td class="k">측정 견고성</td><td>v2.1.1은 충전 곡선 가파른 구간 측정 → C 공차·클럭 오차·코드 순서에 민감</td><td>기기 간 편차 요인</td><td>Layered 방식(안정 후 측정 + 디지털 게인) 유지 권장</td></tr>
+<tr><td>8</td><td class="k">반응 시간</td><td>v2.1.1 계산 반응 대기 약 68~84 s vs 주석 165 s vs Layered 155 s</td><td>반응 진행 정도가 다른 시점에 결과 판정</td><td>v2.1.1 실기에서 삽입~결과 표시 시간 실측</td></tr>
+<tr><td>9</td><td class="k">슈미트 트리거</td><td>v2.1.1만 ADC 핀 슈미트 트리거 Disable</td><td>아날로그 입력 누설·소비전류</td><td>Layered에 이식 검토 (측정값 영향 없음, 전력 개선)</td></tr>
+</tbody></table></div>
+
+<h2>7. 확인 실험 제안</h2>
+<ol>
+  <li><b>LED 점등 시간 실측:</b> 오실로스코프로 PB3/PB4(LED 캐소드)와 PTR1~3 파형 동시 측정 → v2.1.1 On 시간(100/500 count, 튜닝 결과값)과 읽는 시점의 충전율 확정, Layered 20 ms 안정 확인.</li>
+  <li><b>시퀀스 시간 실측:</b> 두 FW에서 스틱 삽입 → 시료 도달 → 결과 표시까지 스톱워치 측정 (특히 v2.1.1 반응 대기 165회 루프).</li>
+  <li><b>교차 측정:</b> 같은 기기에 두 FW를 번갈아 기록하고 같은 Lot 스틱(음성/양성/QC)으로 T·C 강도 비교, QC 명령으로 raw/게인/Empty/Finish 값 수집.</li>
+  <li><b>반복성:</b> 같은 스틱 Empty 측정을 각 FW로 10회 반복 → 표준편차 비교 (노이즈 필터 효과).</li>
+</ol>
+
+<footer>근거: MFx_v2.1.1_alpha.2 (BSP_ADC.c, BSP_LED.c, BSP_HW_Config.c, BSP_StripCheck.c, BSP_Timer.c, Apps_MainApplication.c/.h, Apps_Calculation.c, Parameter_define.h, Debug/Obj/BSP_HW_Config.o) · MFx_Layered (HW_ADC_Drive.c, Optic.c/.h, APP_EXEC_Measure.c/.h, APP_CTRL_Sequence.c, APP_DATA_Config.h, 설계문서/MFx_Layered_설계서.md) · 회로도 HW/OrCad-Surearly_Multi-v1.1-r1574.DSN · 작성 2026-11-09</footer>
+</main>
+</body>
+</html>

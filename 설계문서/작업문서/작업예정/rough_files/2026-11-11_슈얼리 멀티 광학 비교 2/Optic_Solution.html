@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optic 측정 방식 개선</title>
+<style>
+:root { --bg:#f7f8fa; --panel:#fff; --border:#d8dce2; --header-bg:#1f2d3d; --header-fg:#fff; --section-bg:#e8edf5;
+  --note-bg:#fff8e1; --note-fg:#6b5900; --warn-bg:#fff1f0; --warn-fg:#8c1d18; --new-bg:#eafaf0; --ok-fg:#14683c;
+  --accent:#2f6fed; --text:#23292f; --muted:#6b7480; --code-bg:#eef1f5;
+  --c-empty:#2f6fed; --c-band:#d9480f; --c-ideal:#9aa3ad; --c-grid:#e3e6ea; }
+* { box-sizing:border-box; }
+body { margin:0; padding:24px 16px; background:var(--bg); color:var(--text); font-family:"Segoe UI","Malgun Gothic",sans-serif; font-size:14px; line-height:1.55; }
+main { max-width:1120px; margin:0 auto; }
+h1 { font-size:20px; margin:0 0 4px; }
+h2 { font-size:16px; margin:28px 0 10px; border-left:4px solid var(--accent); padding-left:8px; }
+h3 { font-size:14px; margin:18px 0 6px; }
+.subtitle { color:var(--muted); font-size:13px; margin-bottom:16px; }
+.summary { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:8px; padding:12px 16px; }
+.note { background:var(--note-bg); color:var(--note-fg); border-radius:6px; padding:8px 12px; font-size:13px; margin:8px 0; }
+.warnbox { background:var(--warn-bg); color:var(--warn-fg); border-radius:8px; padding:10px 14px; font-size:13px; margin:8px 0; }
+.table-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow-x:auto; margin:8px 0; }
+table { border-collapse:collapse; width:100%; }
+thead th { background:var(--header-bg); color:var(--header-fg); text-align:left; padding:7px 10px; font-size:12.5px; white-space:nowrap; }
+tbody td { padding:6px 10px; border-top:1px solid var(--border); vertical-align:top; font-size:13px; }
+tr.section td { background:var(--section-bg); font-weight:700; }
+tr.changed td { background:var(--new-bg); }
+tr.diff td { background:var(--warn-bg); }
+td.mono, code { font-family:Consolas,monospace; }
+code { background:var(--code-bg); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+.ok { color:var(--ok-fg); font-weight:700; } .ng { color:var(--warn-fg); font-weight:700; }
+.tag { display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; font-weight:600; background:#e3e6ea; color:#40474f; }
+.tag.fact { background:#d9f0e3; color:#14683c; } .tag.guess { background:#fff3cd; color:#7a5c00; }
+.figure { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px; margin:8px 0; }
+.figure svg { width:100%; height:auto; display:block; }
+.figure .cap { color:var(--muted); font-size:12.5px; margin-top:6px; }
+ul, ol { padding-left:22px; } li { margin:2px 0; }
+footer { margin-top:28px; color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Optic 측정 방식 개선 검토 — 포토트랜지스터 포화와 v2.1.1 방식 적용</h1>
+<div class="subtitle">작성 2026-11-11 · hs.kim (Claude Code 보조) · 대상 <code>MFx_Layered</code>, 비교 <code>MFx_v2.1.1_alpha.2</code> · 관련 문서 <code>FW/Opic_vs.html</code>, <code>FW/MFx_Layered_수정검토_스틱판정.html</code> · 상태: 검토 단계 (실측 전) · 개정 2026-11-11: HW 수정 불가 조건 반영, FW 단독 대안 비교(5장) 및 결론 갱신</div>
+
+<h2>요약</h2>
+<div class="summary">
+<ul>
+  <li>담당자 판단: MFx_Layered 방식은 반사광이 높게 측정되어 밴드의 흡광 감도가 낮아지므로 v2.1.1 방식(LED 점등 시간 조정, RC 충전 곡선 위 판독)을 써야 한다.</li>
+  <li>검토 결과: 판단 방향에 동의. 다만 원인은 "반사광이 높은 것" 자체가 아니라 <b>포토트랜지스터가 정상상태에서 포화 근처에 있어 빈 값이 잘리고, 밴드에 의한 감소가 눌리는 것</b>으로 보는 것이 정확함 <span class="tag guess">추정</span>.</li>
+  <li>v2.1.1은 원시값 약 3000(1.83V) 시점에 읽어 동작점을 선형 영역에 두므로 포화 영향을 피함. Layered의 디지털 게인(1200 튜닝)은 스케일만 바꿀 뿐 포화를 해소하지 못함.</li>
+  <li>변경 전 확인 실험 3건(감소폭 비교, PTR 전압 실측, 기존 덤프 분석)을 먼저 하고, 차이가 확인되면 v2.1.1 방식 이식(A안)을 권장.</li>
+  <li><b>[개정 2026-11-11]</b> HW 수정 불가(FW만 수정 가능) 조건에서 FW로 포화를 피하는 방법은 원리상 <b>① 판독 시간(다 차오르기 전에 읽기)</b>과 <b>② LED 듀티(PWM으로 평균 광량 줄이기)</b> 두 가지뿐. 센서 편차 약 3배(1000~3200) 조건에서는 기기마다 판독 시점을 맞추는 <b>v2.1.1 점등 시간 튜닝(A안)이 최선</b>. 고정 시간 창 + 디지털 게인(B안)은 포화 원인 확인용 실험으로만 사용, PWM(D안)은 제외.</li>
+  <li><b>[개정 2026-11-11] A안 파라미터</b>: 센서 입력 범위 원시값 1500~3900(정상상태 판정), 튜닝 목표 원시값 1200, 튜닝 값은 디지털 게인 대신 <b>채널별 콘덴서 충전 시간</b>(LED 켬 ~ ADC 홀드). 원시값이 현재 게인 적용값과 같은 1200이 되므로 뒤쪽 판정 코드(556, T &gt; 1040, C &lt; 1050 등)를 그대로 사용 가능 (5-5).</li>
+</ul>
+</div>
+
+<h2>1. 회로와 두 측정 방식</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th>내용</th></tr></thead>
+<tbody>
+<tr><td>PTR 회로</td><td>포토트랜지스터 PT11-21C (Q1~Q3) 에미터 → PB5/PB6/PB7 (ADC IN13/12/11), 부하 100kΩ + 22nF → τ = 2.2ms <span class="tag fact">회로도</span></td></tr>
+<tr><td>LED 회로</td><td>VCC 2.5V(TPS7A0325) → R13 510Ω(공통) → LED <code>FC-1608UGK-520D26</code> → PB3/PB4 (Low일 때 켜짐). 전류 약 0.1~0.4mA <span class="tag guess">추정</span></td></tr>
+<tr><td>ADC 기준</td><td>VCC 2.5V → 1 count = 0.61mV</td></tr>
+</tbody></table></div>
+
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th>MFx_Layered</th><th>v2.1.1_alpha.2</th></tr></thead>
+<tbody>
+<tr><td>판독 시점</td><td>LED 켜고 20ms 뒤 (약 9τ, 정상상태)</td><td>LED 점등 시간 조정, 충전 곡선 위 (100 count ≈ 0.9ms ≈ 최종값 34% ~ 500 count ≈ 4.5ms ≈ 87%)</td></tr>
+<tr><td>튜닝</td><td>디지털 게인 = round(1200 × 100 / 원시값), 원시값 범위 1500~3900</td><td>LED 점등 시간을 선형 보간해 원시값 3000에 맞춤</td></tr>
+<tr><td>판독 횟수</td><td>연속 21회 변환, 가운데 16개 평균</td><td>채널당 1회 변환, 측정 5회 반복 후 가운데 3개 평균</td></tr>
+<tr><td>ADC 샘플링</td><td>384 사이클 @ 2MHz = 192µs (<code>HW_ADC_Drive.c:32-36</code>)</td><td>16 사이클 @ 1MHz = 16µs</td></tr>
+<tr><td>정상 기기 원시값 (빈 스틱)</td><td>3541~3714 (2.16~2.27V)</td><td>약 3000 (1.83V)으로 튜닝</td></tr>
+<tr><td>포토트랜지스터 Vce (VCC − V<sub>PTR</sub>)</td><td class="ng">0.23~0.34V → 포화 근처 <span class="tag guess">추정</span></td><td class="ok">약 0.67V → 선형 영역</td></tr>
+</tbody></table></div>
+
+<h2>2. 왜 Layered 방식에서 감도가 떨어지나</h2>
+<h3>2-1. 선형 영역이라면 판독 시점과 무관</h3>
+<p>PTR 노드 전압은 V(t) = I<sub>photo</sub> × R × (1 − e<sup>−t/τ</sup>). τ = RC는 광전류와 무관하므로, 어느 시점에 읽어도 V는 광전류에 비례하고 <b>밴드 값 ÷ 빈 값 비율은 같다</b>. 즉 반사광이 높다는 것만으로는 감도가 떨어지지 않는다.</p>
+
+<h3>2-2. 포화 영역에서는 빈 값이 잘림</h3>
+<ul>
+  <li>포토트랜지스터는 Vce가 포화 전압 근처까지 내려가면 더 이상 에미터 전압을 올리지 못함 → 정상상태 전압 상한 ≈ VCC − Vce(sat).</li>
+  <li>빈 스틱(밝음)은 이 상한에 붙고, 밴드 스틱(어두움)은 실제 광량이 줄어도 여전히 상한 근처 → 측정값 감소가 실제 흡광보다 작게 나옴 → 비율이 1에 가까워짐 → <b>T 감도 저하</b>.</li>
+  <li>반사광이 강한 기기·채널일수록 영향이 큼. 기기별 편차의 원인이 될 수 있음.</li>
+  <li>Layered 범위 상한 3900(2.38V)은 이 포화를 걸러내지 못함 (Work 추가 기록 3, A4).</li>
+  <li>디지털 게인은 포화로 잘린 뒤의 값에 곱해지므로 눌린 비율을 복원하지 못함.</li>
+</ul>
+
+<div class="figure">
+<svg viewBox="0 0 680 310" role="img" aria-label="포화 시 RC 충전 곡선 개념도">
+  <g stroke="var(--c-grid)" stroke-width="1">
+    <line x1="60" y1="20" x2="620" y2="20"/><line x1="60" y1="100" x2="620" y2="100"/><line x1="60" y1="180" x2="620" y2="180"/>
+    <line x1="200" y1="20" x2="200" y2="260"/><line x1="340" y1="20" x2="340" y2="260"/><line x1="480" y1="20" x2="480" y2="260"/>
+  </g>
+  <line x1="60" y1="260" x2="620" y2="260" stroke="#6b7480"/><line x1="60" y1="20" x2="60" y2="260" stroke="#6b7480"/>
+  <g font-size="11" fill="#6b7480" font-family="Segoe UI, sans-serif">
+    <text x="54" y="264" text-anchor="end">0V</text><text x="54" y="184" text-anchor="end">1.0V</text><text x="54" y="104" text-anchor="end">2.0V</text><text x="54" y="24" text-anchor="end">3.0V</text>
+    <text x="60" y="278" text-anchor="middle">0</text><text x="200" y="278" text-anchor="middle">5ms</text><text x="340" y="278" text-anchor="middle">10ms</text><text x="480" y="278" text-anchor="middle">15ms</text><text x="620" y="278" text-anchor="middle">20ms</text>
+    <text x="340" y="300" text-anchor="middle">LED 점등 후 시간</text>
+  </g>
+  <line x1="60" y1="80" x2="620" y2="80" stroke="var(--warn-fg)" stroke-dasharray="5 4"/>
+  <text x="616" y="74" font-size="11" fill="var(--warn-fg)" text-anchor="end">포화 상한 ≈ VCC − Vce(sat)</text>
+  <polyline fill="none" stroke="var(--c-ideal)" stroke-dasharray="3 3" stroke-width="1.5" points="160.8,79.6 172.0,72.4 183.2,66.3 194.4,61.3 205.6,57.1 228.0,50.6 250.4,46.2 284.0,41.9 317.6,39.4 362.4,37.7 418.4,36.7 485.6,36.2 552.8,36.1 620.0,36.0"/>
+  <polyline fill="none" stroke="var(--c-ideal)" stroke-dasharray="3 3" stroke-width="1.5" points="239.2,80.0 261.6,76.8 284.0,74.6 317.6,72.5 362.4,71.0 418.4,70.2 485.6,69.8 552.8,69.7 620.0,69.6"/>
+  <polyline fill="none" stroke="var(--c-empty)" stroke-width="2.5" points="60.0,260.0 71.2,222.8 82.4,191.7 93.6,165.8 104.8,144.2 116.0,126.2 127.2,111.2 138.4,98.7 149.6,88.3 160.8,80.0 620.0,80.0"/>
+  <polyline fill="none" stroke="var(--c-band)" stroke-width="2.5" points="60.0,260.0 71.2,228.3 82.4,202.0 93.6,180.0 104.8,161.6 116.0,146.3 127.2,133.6 138.4,122.9 149.6,114.1 160.8,106.7 172.0,100.5 183.2,95.4 194.4,91.1 205.6,87.5 216.8,84.5 228.0,82.1 239.2,80.0 620.0,80.0"/>
+  <line x1="125.2" y1="113.6" x2="125.2" y2="135.6" stroke="#23292f" stroke-width="2"/>
+  <circle cx="125.2" cy="113.6" r="4" fill="var(--c-empty)"/><circle cx="125.2" cy="135.6" r="4" fill="var(--c-band)"/>
+  <text x="132" y="152" font-size="11.5" fill="#23292f">v2.1.1 판독 (≈1.83V): 차이 15% 유지</text>
+  <circle cx="620" cy="80" r="5" fill="none" stroke="#23292f" stroke-width="2"/>
+  <text x="612" y="104" font-size="11.5" fill="#23292f" text-anchor="end">Layered 판독 (20ms): 둘 다 상한 → 차이 거의 0</text>
+  <g font-size="11.5" font-family="Segoe UI, sans-serif">
+    <rect x="380" y="196" width="10" height="3" fill="var(--c-empty)"/><text x="396" y="201">빈 스틱 (광량 100%)</text>
+    <rect x="380" y="214" width="10" height="3" fill="var(--c-band)"/><text x="396" y="219">밴드 (광량 85%)</text>
+    <rect x="380" y="232" width="10" height="3" fill="var(--c-ideal)"/><text x="396" y="237">포화가 없을 때의 곡선</text>
+  </g>
+</svg>
+<div class="cap">개념도 <span class="tag guess">추정</span>: 포화 없을 때 빈 스틱 정상상태 2.8V, 밴드는 광량 85%로 가정하고 포화 상한 2.25V에서 단순 절단. 실제 포화는 상한 근처에서 완만하게 휘므로 Layered 판독값 차이는 0이 아니라 "실제보다 작게" 나타남.</div>
+</div>
+
+<h2>3. v2.1.1 방식이 포화를 피하는 이유</h2>
+<ul>
+  <li>LED 점등 시간을 기기·채널별로 조정해 원시값 약 3000(1.83V, Vce 약 0.67V)에서 읽음 → 판독 순간 포토트랜지스터는 선형 영역.</li>
+  <li>최종 정상상태가 포화될 만큼 빛이 강해도, 그 전 구간의 곡선은 광전류에 비례 → 비율(흡광) 정보가 보존됨.</li>
+  <li>즉 v2.1.1은 <b>판독 시점으로 동작점을 선형 영역에 맞추는 방식</b>이고, Layered는 정상상태에서 읽어 동작점을 조절할 수단이 없음.</li>
+</ul>
+
+<h2>4. ADC 샘플앤홀드와 판독 시점</h2>
+<ul>
+  <li>STM8L151 ADC는 SAR 방식, 샘플앤홀드 내장 <span class="tag fact">사실</span>. 설정 사이클 동안 내부 샘플링 커패시터(수 pF)가 입력을 추적하고, 샘플링이 끝나는 순간 홀드 → 이후 변환(약 12 ADC 클럭) 동안 입력이 변해도 결과에 영향 없음.</li>
+  <li>결과 = <b>샘플링이 끝난 순간의 입력 전압</b>. 입력이 일정하면 사이클 수와 무관하고, 입력이 변하는 중이면 사이클을 늘린 만큼 늦은 시점 값을 읽음.</li>
+  <li>Layered: 정상상태에서 읽으므로 384 사이클이어도 값이 거의 같음. 100kΩ 고임피던스지만 22nF가 전하 공급원 역할을 해 내부 커패시터 연결에 따른 강하는 매우 작음 <span class="tag guess">추정</span>.</li>
+  <li>v2.1.1: 곡선 위(기울기 큼)에서 읽으므로 샘플링 시간이 판독 시점을 바꿈. 예) 34% 지점 기울기 약 30%/ms → 16µs → 384µs로 늘리면 홀드가 약 0.37ms 늦어져 최종값 기준 약 10% 상승 <span class="tag guess">추정</span>.</li>
+  <li>→ v2.1.1 방식을 이식하면 <b>ADC 샘플링을 짧게(16 사이클 수준)</b> 해야 하며, 사이클·클럭을 바꾸면 v2.1.1 데이터와 직접 비교 불가.</li>
+  <li>미확인: v2.1.1에서 ADC 샘플링 중 LED가 켜져 있는지, LED를 끈 뒤 22nF에 남은 전압을 읽는지 (끈 뒤라면 그 사이 100kΩ로 방전되어 영향 방향이 달라짐) → 코드 확인 필요.</li>
+</ul>
+
+<h2>5. 해결 방안 비교 (개정 2026-11-11: FW 수정만 가능)</h2>
+<h3>5-1. FW로 바꿀 수 있는 것은 두 가지</h3>
+<p>포화는 PTR 노드 전압이 VCC − Vce(sat)에 닿아서 생긴다. LED 전류(R13 510Ω)와 부하(100kΩ, 22nF)는 HW로 고정이므로, FW로 판독 시 노드 전압을 낮추는 방법은 원리상 다음 둘뿐이다.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>수단</th><th>원리</th><th>해당 방안</th></tr></thead>
+<tbody>
+<tr><td>① 판독 시간</td><td>상승 곡선이 포화 전압에 닿기 전에 읽음. V(t) = I·R·(1 − e<sup>−t/τ</sup>)에서 τ는 광전류와 무관하므로 같은 시각의 값(또는 정해진 시각들의 평균)은 광전류에 정확히 비례</td><td>A안(v2.1.1, 기기별 점등 시간 튜닝), B안(고정 시간 창)</td></tr>
+<tr><td>② LED 듀티</td><td>LED를 빠르게 켰다 꺼서 평균 광량을 줄임. 주기 ≪ τ이면 정상상태 전압 = 듀티 × 원래 전압</td><td>D안(PWM 디밍)</td></tr>
+</tbody></table></div>
+<p>그 밖의 FW 방법은 제외: 디지털 보정(이미 잘린 값은 복원 불가), 문턱 도달 시간 측정(시간과 광전류 관계가 로그형이라 비례가 깨지고, 빛이 약한 기기는 문턱에 도달하지 못할 수 있음).</p>
+
+<h3>5-2. 방안 비교</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>안</th><th>방법</th><th>장점</th><th>단점 / 주의</th><th>판단</th></tr></thead>
+<tbody>
+<tr class="changed"><td><b>A</b></td><td>v2.1.1 방식 이식: 채널별 LED 점등 시간을 튜닝해 곡선 위 목표값(예: 3000, 1.83V)에서 판독</td><td>모든 기기가 같은 동작점(같은 포화 여유, 같은 해상도·SNR). 출시 FW에서 검증. 튜닝된 점등 시간이 기기 광량 지표가 됨</td><td>타이밍 정밀도, 반복 측정 구조로 변경, 플래시 여유 약 60 byte</td><td class="ok">채택 권장</td></tr>
+<tr><td>B</td><td>고정 시간 창 + 디지털 게인: LED를 켜고 바로 상승 구간을 연속 변환해 평균, 디지털 게인으로 1200에 맞춤 (5-4)</td><td>코드 변경 최소(상수 + LED 켜는 위치)</td><td>창이 모든 기기에 같아 센서 편차 약 3배를 감당하기 어려움: 밝은 기기는 포화 여유 감소, 어두운 기기는 원시값이 작아 해상도·SNR 저하. 디지털 게인은 숫자 크기만 맞추고 동작점은 못 바꾸며 노이즈도 함께 키움</td><td>포화 원인 확인 실험용으로만 사용</td></tr>
+<tr><td>D</td><td>PWM 디밍: 20ms 대기 동안 LED 토글, 듀티로 노드 전압을 낮춤 (Layered 정상상태 구조 유지)</td><td>20ms 대기·21회 평균·디지털 게인 구조 유지</td><td>LED 핀 PB3/PB4에 타이머 출력이 없을 것으로 추정(데이터시트 확인 필요) → 인터럽트 토글, 측정 중 CPU 약 20~40% 점유. 리플 약 40mV(10kHz, 듀티 50%, 정상상태 3.5V 기준) <span class="tag guess">추정</span>. 포토트랜지스터 응답 시간으로 평균 전류가 듀티에 정확히 비례하지 않을 수 있음. 플래시 약 40~80 byte</td><td class="ng">제외</td></tr>
+<tr><td>C</td><td>HW 변경: 부하 저항 100kΩ 낮춤</td><td>—</td><td>HW 수정 불가</td><td class="ng">불가</td></tr>
+</tbody></table></div>
+
+<h3>5-3. A안이 B안보다 나은 이유</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th>B: 고정 창 + 디지털 게인</th><th>A: v2.1.1 점등 시간 튜닝</th></tr></thead>
+<tbody>
+<tr><td>판독 전압</td><td>기기마다 다름 (밝으면 높고 어두우면 낮음)</td><td>모든 기기 약 3000(1.83V)</td></tr>
+<tr><td>포화 여유</td><td>밝은 기기일수록 줄어듦</td><td>모든 기기 같음</td></tr>
+<tr><td>해상도·SNR</td><td>어두운 기기 불리, 게인이 노이즈도 증폭</td><td>모든 기기 같음</td></tr>
+<tr><td>기기 진단</td><td>원시값만 남음</td><td>튜닝된 점등 시간 = 광량 지표</td></tr>
+<tr><td>스틱 판정 기준</td><td>게인 적용값(556) 유지</td><td>튜닝 후 모든 채널 약 3000 → 이탈 기준을 원시값 고정값(예: 3000의 46% ≈ 1390)으로 단순화 가능</td></tr>
+</tbody></table></div>
+
+<h3>5-4. B안 상세 (실험용)</h3>
+<ol>
+  <li><code>OPTIC_SAMPLE</code> 단계에서 LED를 켜고 대기 없이 바로 측정 시작 (SETTLE 단계 생략).</li>
+  <li>첫 변환 1회 버림 → 20회 연속 변환, ADC 샘플링 <b>192 사이클</b> (STM8L 선택값: 4, 9, 16, 24, 48, 96, 192, 384).</li>
+  <li>정렬 후 가운데 16개 평균 (상승 중이라 사실상 시간 순서상 가운데 구간 평균).</li>
+  <li>LED 끄고 다음 측정까지 방전 대기 30ms 이상 (현재 RECOVER 10ms ≈ 4.5τ는 약 1% 잔류 → 같은 센서를 연달아 쓰는 BT→BC에서 오차).</li>
+  <li>평균값에 디지털 게인을 곱해 1200으로 맞춤. 포화 감시: 정렬 후 최대 샘플이 상한(예: 3300)을 넘으면 오류.</li>
+</ol>
+<p>측정 창 길이 <span class="tag guess">추정, 실측 필요</span>: 변환 1회 = (192 + 약 12) ÷ 2MHz ≈ 102µs에 <code>HW_ADC_Read()</code> 호출 오버헤드(매회 채널 켬·변환 시작·완료 대기·읽기·채널 끔, <code>HW_ADC_Drive.c:60-98</code>)가 더해짐 → 21회 전체 약 2.1ms(오버헤드 0 가정) ~ 4ms 이상. 현재 코드 주석의 "21회 4.2ms"(384 사이클)도 이론값으로 보임. GPIO 토글 + 오실로스코프로 실제 창을 측정해야 함.</p>
+<p class="note">용도: 상수 몇 개와 LED 켜는 위치만 바꾸면 되므로, 같은 기기·같은 스틱으로 현재 방식과 T 비율 감소폭을 비교해 "포화가 감도 저하의 원인인지" 빠르게 확인하는 실험(E1)에 사용.</p>
+
+<h3>A안 이식 시 주의점</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th>내용</th></tr></thead>
+<tbody>
+<tr><td>타이밍 정밀도</td><td>기울기가 큰 구간에서 읽으므로 시간 오차가 그대로 값 오차. 34% 지점 기준 1µs ≈ 0.03% <span class="tag guess">추정</span>. v2.1.1의 소프트웨어 루프 지연(<code>BSP_SW_Delay</code> 약 9µs/count, 디스어셈블리 기준) 대신 <b>타이머 카운터(TIM2, 2MHz → 0.5µs 단위)</b>로 생성, 가능하면 타이머로 ADC 변환을 직접 시작해 지터 제거</td></tr>
+<tr><td>인터럽트</td><td>지연 구간에 10ms 틱(TIM4)·UART 수신 인터럽트가 끼지 않도록 처리: 틱 직후 시작(<code>System_Main.c:112</code> 10ms 슬롯) 또는 짧게 인터럽트 차단</td></tr>
+<tr><td>튜닝 계산</td><td>v2.1.1은 100·500 count 두 지점 선형 보간으로 3000을 목표. 곡선이 지수형이라 선형 보간은 목표에서 벗어남 → 보간 후 1회 재측정 보정 또는 허용 오차 판정 추가 (v2.1.1 실제 튜닝 정확도는 확인 필요)</td></tr>
+<tr><td>ADC 샘플링</td><td>384 → 16 사이클 수준으로 단축 (4장)</td></tr>
+<tr><td>평균 방식</td><td>곡선 위에서는 연속 21회 평균 불가. "LED 켬 → 지연 → 1회 변환 → LED 끔 → 방전 대기(약 5τ = 11ms)" 반복. v2.1.1은 5회 측정 후 가운데 3개 평균</td></tr>
+<tr><td>클럭</td><td>Layered 2MHz, v2.1.1 1MHz. HSI 오차·온도에 따른 지연 변화는 같은 기기 안 빈 값/밴드 값 비율 계산에서 대부분 상쇄 <span class="tag guess">추정</span></td></tr>
+<tr><td>튜닝 실패 조건</td><td>점등 시간 상·하한(v2.1.1 기준 확인 필요) 밖이면 광학 오류 → 현재 1500~3900 범위 판정을 대체</td></tr>
+<tr><td>스틱 판정 연계</td><td>이탈 확인 기준 556(게인 적용값)은 디지털 게인 전제 → 점등 시간 방식에서는 튜닝 후 원시값 기준(예: 3000의 46% ≈ 1390)으로 재정의 (<code>MFx_Layered_수정검토_스틱판정.html</code> D5와 함께 검토). 기상 직후 판정은 채터링 확인으로 바뀌므로 튜닝 전 고정 기준 불필요</td></tr>
+<tr><td>플래시</td><td>여유 약 60 byte (8,132 / 8,192). 빠지는 코드: 디지털 게인 계산(<code>TuneGain</code> 게인 부분, <code>s_Scale</code>, <code>GetScaledSet</code>), 21회 정렬·평균 일부. 들어가는 코드: 점등 시간 튜닝, 타이머 지연, 반복 측정 → 비슷한 규모로 교체 추정, map 확인 필요</td></tr>
+</tbody></table></div>
+
+<h3>5-5. A안 설계 파라미터 (개정 2026-11-11, 담당자 결정)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th>값</th><th>의미</th></tr></thead>
+<tbody>
+<tr class="changed"><td>센서 입력 범위</td><td>원시값 <b>1500~3900</b></td><td>튜닝 전, LED 켜고 정상상태(20ms)에서 읽은 값으로 센서 정상 여부 판정. 1500 미만 = 너무 어둡거나 고장. 정상상태 값은 포화로 잘릴 수 있으나 범위 판정에만 쓰므로 무관</td></tr>
+<tr class="changed"><td>튜닝 목표</td><td>원시값 <b>1200</b> (0.73V)</td><td>충전 시간을 조정해 곡선 위 1200 시점에 판독. 이때 Vce 약 1.77V → 포화와 멀어 A4(포화) 영향 없음</td></tr>
+<tr class="changed"><td>튜닝 값</td><td>채널별 <b>충전 시간</b></td><td>디지털 게인(정수 %) → "LED 켠 순간 ~ ADC 샘플링 끝(홀드)"까지의 시간. 충전 시간이 아날로그 게인 역할</td></tr>
+</tbody></table></div>
+
+<h4 style="font-size:13.5px;margin:14px 0 6px">튜닝 값의 의미 변화</h4>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>현재 (디지털 게인)</th><th>변경 후 (충전 시간)</th></tr></thead>
+<tbody>
+<tr><td>채널별 저장 값</td><td><code>awGain[ch]</code> = round(1200 × 100 / 원시값)</td><td><code>awGain[ch]</code> 자리에 충전 시간 (예: TIM2 0.5µs 단위 카운트)</td></tr>
+<tr><td>측정 순서</td><td>LED 켬 → 20ms 대기 → 21회 변환 → 가운데 16개 평균 → × 게인 / 100</td><td>LED 켬 → 충전 시간 대기 → ADC 1회 판독(홀드) → LED 끔 → 방전 대기 ≥ 5τ(11ms), 여러 회 반복 평균</td></tr>
+<tr><td>결과</td><td>계산으로 약 1200</td><td>원시값 자체가 약 1200</td></tr>
+<tr><td>맞추는 위치</td><td>숫자 계산 (동작점 그대로)</td><td>아날로그 동작점</td></tr>
+</tbody></table></div>
+<p>V(t) = I·R·(1 − e<sup>−t/τ</sup>)에서 빈 스틱 기준 1200이 되도록 t를 정하면, 이후 같은 t로 측정한 밴드 값은 광전류에 비례 → 비율(<code>Intensity</code>) 계산 그대로 유효.</p>
+
+<h4 style="font-size:13.5px;margin:14px 0 6px">뒤쪽 코드 호환 (목표 1200을 유지하는 이점)</h4>
+<ul>
+  <li>원시값이 현재 게인 적용값과 같은 약 1200 → 스틱 이탈 기준 556(1200의 46%), 시료 도달·과다·소량 판정 비율, 결과 기준(T &gt; 1040, C &lt; 1050), <code>Intensity</code> 비율 계산을 수정 없이 사용 가능.</li>
+  <li>스케일 계산은 게인 100(×1.0) 고정 또는 삭제. 허용 오차 ±25(약 ±2%)는 0.5µs 단위 조정으로 달성 가능 <span class="tag guess">추정</span>.</li>
+</ul>
+
+<h4 style="font-size:13.5px;margin:14px 0 6px">목표 1200의 판독 조건 <span class="tag guess">추정, τ = 2.2ms</span></h4>
+<div class="table-wrap"><table>
+<thead><tr><th>정상상태 원시값 S</th><th>1200 도달 시간 t = −τ·ln(1 − 1200/S)</th><th>1200 지점 기울기</th><th>1µs 오차 영향</th></tr></thead>
+<tbody>
+<tr><td>3900 (밝음)</td><td>약 0.81ms</td><td>약 1.2 count/µs</td><td>약 0.1%</td></tr>
+<tr><td>2600</td><td>약 1.4ms</td><td>약 0.64 count/µs</td><td>약 0.05%</td></tr>
+<tr><td>1500 (어두움)</td><td>약 3.5ms</td><td>약 0.14 count/µs</td><td>약 0.01%</td></tr>
+</tbody></table></div>
+<p>포화된 기기는 실제 광량이 S보다 커서 더 빨리 도달. 0.5µs 단위로 약 1,600~7,000 카운트 → <code>uint16_t</code>로 충분.</p>
+
+<h4 style="font-size:13.5px;margin:14px 0 6px">구현 시 정할 것</h4>
+<div class="table-wrap"><table>
+<thead><tr><th>항목</th><th>내용</th></tr></thead>
+<tbody>
+<tr><td>시간 기준점</td><td>"LED 켠 순간 ~ ADC 샘플링 끝"으로 정의. 샘플링 사이클을 짧게(16~24) 고정하면 일정한 오프셋이 되어 튜닝에 흡수. 정상상태 범위 판정 측정은 384 사이클 사용 가능</td></tr>
+<tr><td>시작 조건</td><td>매 판독 전 콘덴서 0V: LED 끈 뒤 5τ(11ms) 이상 대기</td></tr>
+<tr><td>LED 공유 채널</td><td>T·BT(LED2), BC·C(LED1)도 채널별로 따로 튜닝·따로 점등 측정 (센서 위치가 달라 충전 시간이 다름)</td></tr>
+<tr><td>튜닝 절차</td><td>① 정상상태 S로 범위(1500~3900) 판정 → ② t = −τ·ln(1 − 1200/S)로 초기값 → ③ 그 시간에 측정해 1200±25가 되도록 1~2회 보정. τ 부품 편차와 S 포화 잘림은 ③에서 흡수 (선형 보간만으로는 지수 곡선이라 목표에서 벗어남)</td></tr>
+<tr><td>오류 조건</td><td>충전 시간이 상·하한 밖(너무 밝음: 예 0.3ms 미만 / 너무 어두움)이면 광학 오류. 입력 범위 판정 보완</td></tr>
+<tr><td>해상도</td><td>v2.1.1(목표 3000)보다 2.5배 낮음: 1 count = 0.083%, T 판정 여유 4% ≈ 48 count → 반복 평균(5회 이상) 필요</td></tr>
+<tr><td>어두운 기기</td><td>S가 1500 근처면 1200이 정상상태의 80% → 곡선 평탄부에서 판독. 값은 광전류에 비례하나 충전 시간이 길고(약 3.5ms) 범위 하한에 가까워 여유 적음</td></tr>
+<tr><td>저장·덤프</td><td>결과 슬롯에 저장되는 게인 값(<code>s_SaveResult</code>, <code>APP_CTRL_Sequence.c:472</code>)의 의미가 충전 시간으로 바뀜 → QC <code>M</code> 덤프 PC 파서 반영 필요</td></tr>
+</tbody></table></div>
+
+<h2>6. 변경 전 확인 실험 (권장)</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>실험</th><th>방법</th><th>판단 기준</th></tr></thead>
+<tbody>
+<tr class="diff"><td>E1</td><td>감소폭 비교</td><td>같은 기기·같은 스틱(빈 스틱, 표준 농도 밴드 스틱)을 Layered 방식과 v2.1.1 방식으로 각각 측정해 T 비율 감소폭 비교</td><td>v2.1.1 방식 감소폭이 확실히 크면 포화가 원인으로 확인</td></tr>
+<tr><td>E2</td><td>포화 직접 확인</td><td>스틱 삽입 상태에서 PTR1~3(PB5~PB7) 전압을 LED 점등 후 시간에 따라 측정 (오실로스코프)</td><td>20ms 시점 전압이 VCC − Vce(sat)에 붙어 평탄하면 포화. 곡선이 지수형에서 벗어나 꺾이는 지점 확인</td></tr>
+<tr><td>E3</td><td>기존 데이터 분석</td><td><code>MFx_Layered/설계문서/작업문서/측정데이터/2026-11-03_12번기기_덤프_*.csv</code>에서 빈 값 원시값과 결과 비율의 관계 확인</td><td>빈 값이 3500 이상인 채널에서 비율 변화가 작게 나오면 간접 확인</td></tr>
+<tr><td>E4</td><td>LED 전류</td><td>측정 중 R13 양단 전압 / 510Ω</td><td>LED 전류 확정 (현재 추정 0.1~0.4mA)</td></tr>
+</tbody></table></div>
+
+<h2>7. 결론 및 다음 단계</h2>
+<p class="note"><b>개정 2026-11-11</b>: HW 수정 불가 조건에서 A안(v2.1.1 점등 시간 튜닝 이식 + 5장 개선점)을 채택 방향으로 정함. B안(고정 창)은 E1 실험용, D안(PWM)·C안(HW)은 제외. 파라미터: 센서 입력 범위 1500~3900(정상상태), 튜닝 목표 원시값 1200, 튜닝 값 = 채널별 충전 시간 (5-5).</p>
+<ol>
+  <li>담당자 판단(v2.1.1 방식 사용)에 동의. 근거는 포토트랜지스터 포화에 의한 흡광 감소 압축 <span class="tag guess">추정</span>.</li>
+  <li>E1·E2로 포화를 먼저 확인 → 확인되면 A안 이식 설계(점등 시간 튜닝, ADC 샘플링 단축, 반복 평균, 인터럽트 차단).</li>
+  <li>A안 설계 시 스틱 이탈 판정(556), 초기값 범위(1500~3900), 오류 코드 체계를 함께 재정의.</li>
+  <li>v2.1.1 코드에서 ADC 샘플링 중 LED 상태 확인.</li>
+</ol>
+
+<footer>근거: 회로도 <code>HW/OrCad-Surearly_Multi-v1.1-r1574.DSN</code> (Tcl 추출), MFx_Layered/User (01_HW_Drive/HW_ADC_Drive.c, 02_Module/Optic.c/.h, 03_App/APP_EXEC_Measure.c, APP_DATA_Config.h), MFx_v2.1.1_alpha.2 (BSP/BSP_HW_Config.c, 메인 측정 코드), FW/Opic_vs.html, Work_2026-11-09_HW_FW_핀맵_대조.html 추가 기록 3(A4) · 작성 2026-11-11</footer>
+</main>
+</body>
+</html>
