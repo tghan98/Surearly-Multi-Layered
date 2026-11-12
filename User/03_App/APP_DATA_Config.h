@@ -122,6 +122,18 @@
 #define APP_STICK_SW_PASS                  20u
 #define APP_STICK_STRIKES                   2u
 
+/* Switch contact fault, for the production line (QC call 2026-11-11). Some
+   units close the switch while the stick is pushed in and let go as soon as
+   the hand does. A contact that opens now and then is tolerated above; one
+   that stays open is to be sorted out, and the operator tells the two
+   faults apart on the panel:
+     BOOK at once on insertion          -> optics (acceptance window, tuning)
+     BOOK after the insert animation    -> switch contact
+   "Stays open" is this many windows in a row, open at the moment the
+   animation ends: 4 x 250 ms = 1 s. Stored as STICK_FAIL in step 1, which
+   no other path produces, so a dump tells it apart without a new code. */
+#define APP_SW_FAULT_WINDOWS                4u
+
 /* "Sample arrived" is a drop in T against BT, and a stick being pulled out
    darkens both, which passes for the same drop (bench dumps 2026-11-06,
    defect 1). So the run does not move on at once: it holds for about a

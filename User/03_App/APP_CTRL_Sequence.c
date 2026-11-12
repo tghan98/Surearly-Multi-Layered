@@ -391,6 +391,15 @@ static void s_StepStickInsert(void)
                 break;
             }
 
+            /* The stick is in (the optics say so, or the removal check would
+               have ended the run) but the switch has stayed open: a contact
+               fault, shown as BOOK instead of DROP (APP_SW_FAULT_WINDOWS). */
+            if (s_seq.bSwOpenRun >= (uint8_t)APP_SW_FAULT_WINDOWS)
+            {
+                s_EnterError(APP_ERR_STICK_FAIL);
+                break;
+            }
+
             /* DROP steady, not blinking. The old FW blinks DROP only while
                the reaction runs and on a stick-removed error, so a blink
                here reads to the operator as "wait", and the sample never
