@@ -30,6 +30,7 @@ typedef struct
     uint16_t    wMin;
     uint16_t    wMax;
     uint8_t     bReads;                     /* reads taken so far         */
+    uint8_t     bOnce;                      /* 1: a single timed reading  */
     Ret_t       tError;                     /* pending, taken by _TakeError */
     uint8_t     bErrPending;
 } Optic_Ctx;
@@ -128,6 +129,17 @@ Ret_t Optic_Init(void)
     return RET_OK;
 }
 
+Ret_t Optic_StartOnce(Optic_Ch tCh)
+{
+    Ret_t tRet = Optic_Start(tCh);
+
+    if (tRet == RET_OK)
+    {
+        s_optic.bOnce = 1u;
+    }
+    return tRet;
+}
+
 Ret_t Optic_Start(Optic_Ch tCh)
 {
     if ((uint8_t)tCh >= (uint8_t)OPTIC_CH_COUNT)
@@ -140,6 +152,7 @@ Ret_t Optic_Start(Optic_Ch tCh)
     }
 
     s_optic.tCh    = tCh;
+    s_optic.bOnce  = 0u;
     s_optic.bReads = 0u;
     s_optic.wSum   = 0u;
     s_optic.wMin   = 0xFFFFu;
@@ -191,7 +204,8 @@ Ret_t Optic_Process(void)
             else
             {
                 tRet = s_ReadTimed(&wRead);
-                s_optic.bReads++;
+                s_optic.bReads = (s_optic.bOnce != 0u)
+                                 ? OPTIC_READS : (uint8_t)(s_optic.bReads + 1u);
             }
 
             /* LED off before anything else: a stuck ADC must not hold 20 mA. */
@@ -221,7 +235,8 @@ Ret_t Optic_Process(void)
             if (s_optic.bReads >= OPTIC_READS)
             {
                 (void)HW_ADC_Disable();
-                if (s_optic.awTime[s_optic.tCh] != 0u)
+                if ((s_optic.awTime[s_optic.tCh] != 0u)
+                    && (s_optic.bOnce == 0u))
                 {
                     /* Old FW: five readings, mean of the middle three. Without
                        a sort: the sum less the highest and the lowest. */

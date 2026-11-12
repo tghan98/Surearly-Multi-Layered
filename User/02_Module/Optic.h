@@ -95,6 +95,15 @@ Ret_t Optic_Init(void);
 Ret_t Optic_Start(Optic_Ch tCh);
 
 /**
+  * @brief  Starts a single timed reading instead of five (charge-time
+  *         tuning, where +/-100 is good enough and time matters).
+  * @param  tCh : channel to measure, its charge time already set (not 0)
+  * @note   Layer: Module. Blocking: no. ISR: no.
+  * @retval RET_OK, RET_ERR_PARAM, RET_BUSY
+  */
+Ret_t Optic_StartOnce(Optic_Ch tCh);
+
+/**
   * @brief  Advances the measurement. Call from the 10 ms slot.
   * @note   Layer: Module. Blocking: a timed reading takes its charge time,
   *         up to about 3.5 ms, see the file header. ISR: no.

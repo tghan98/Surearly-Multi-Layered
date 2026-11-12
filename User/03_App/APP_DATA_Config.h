@@ -61,21 +61,18 @@
    It replaced a digital gain on the steady reading, which only rescaled a
    reading that was already clipped. */
 #define APP_OPTIC_TARGET_LIGHT           1200u   /* old _nTAGET_LIGHT          */
-#define APP_OPTIC_TUNE_TOLERANCE           25u   /* old OPTIC_TUNED_TOLERANCE  */
-/* First guess: the curve starts as a straight line of slope S / tau, so
-   tau x 1200 / S is a little short of the target, and each correction
-   t x 1200 / reading closes in from below without overshooting (the curve
-   bends down). The parts give tau = 2.2 ms = 1467 loops; measured on 12호기
-   (2026-11-11) it is about 2750 loops on bright channels and 3300..3500 on
-   dim ones, so the charge is about twice as slow as the parts say. Only the
-   first guess uses this: 12호기 still needs 3 readings either way. */
-#define APP_OPTIC_TAU_LOOPS              2750u
-#define APP_OPTIC_TUNE_TRIES               10u
-/* Stops a runaway. Sized from the measured charge: a channel at the bottom
-   of the acceptance window (S 1500) needs 1200 / 1500 = 80 % of its steady
-   level, about 1.6 tau = 6,100..6,200 loops, more than the 6000 first used.
-   10000 loops is about 15 ms with interrupts masked: one 10 ms tick can be
-   lost, which the test timing (seconds) does not notice. (2026-11-11) */
+/* Two-point tuning (hs.kim, 2026-11-12 meeting 04:23~17:59). The steady
+   reading S is taken as what the node reaches by about 4.5 ms, so a first
+   estimate of the charge time for 1200 is e = 4.5 ms x 1200 / S. One reading
+   each at e - 200 and e + 200 loops; the curve is close to a straight line
+   over so short a span, and the line through the two points gives the time
+   for 1200. No check reading: +/-100 is good enough, because the result is a
+   ratio of ratios and the dry reading taken next is what it is divided by.
+   Simulated on the 112 channels of the 2026-11-12 dumps: -42 .. +9 from 1200.
+   It replaced measure-and-correct to within +/-25, which took 3..6 readings
+   of five each per channel, about 1..3 s before the insert animation. */
+#define APP_OPTIC_FULL_LOOPS             3000u   /* 4.5 ms at 1.5 us a loop */
+#define APP_OPTIC_TUNE_SPAN               200u   /* each side of e, loops   */
 #define APP_OPTIC_TIME_MAX_LOOPS        10000u
 
 /* Line intensity thresholds -------------------------------------------------*/

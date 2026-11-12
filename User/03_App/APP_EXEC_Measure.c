@@ -30,7 +30,8 @@ typedef struct
     uint8_t                 bCh;          /* channel under way            */
     uint8_t                 bPresent;     /* last presence outcome        */
     uint8_t                 bTries;       /* tuning readings, this channel */
-    uint16_t                wTime;        /* charge time being tried      */
+    uint16_t                wTime;        /* first tuning point, loops    */
+    uint16_t                wY1;          /* reading at the first point   */
     APP_DATA_ErrorCode      tErr;         /* outcome of sweep and tuning  */
     uint16_t                awInitial[APP_EXEC_MEASURE_INITIAL_WORDS];
 } Meas_Ctx;
@@ -46,6 +47,7 @@ __near static Meas_Ctx s_meas;
 static void     s_JudgeStick(void);
 static Ret_t    s_StartOptic(Optic_Ch tCh);
 static void     s_TuneTry(uint16_t wTime);
+static void     s_TuneFirst(void);
 static void     s_EndTune(APP_DATA_ErrorCode tErr);
 static APP_DATA_ErrorCode s_FailCh(void);
 
@@ -58,10 +60,21 @@ static void s_TuneTry(uint16_t wTime)
     {
         wTime = 1u;
     }
-    s_meas.wTime = wTime;
     s_meas.bTries++;
     (void)Optic_SetTime((Optic_Ch)s_meas.bCh, wTime);
-    (void)s_StartOptic((Optic_Ch)s_meas.bCh);
+    (void)Optic_StartOnce((Optic_Ch)s_meas.bCh);
+}
+
+/* First point of the current channel: e - span, e = full x 1200 / S.
+   S is 1500..3900 here, so e is 923..2400 and e - 200 never reaches 0. */
+static void s_TuneFirst(void)
+{
+    uint32_t dwE;
+
+    dwE = ((uint32_t)APP_OPTIC_FULL_LOOPS * (uint32_t)APP_OPTIC_TARGET_LIGHT)
+          / s_meas.awInitial[s_meas.bCh];
+    s_meas.wTime = (uint16_t)(dwE - APP_OPTIC_TUNE_SPAN);
+    s_TuneTry(s_meas.wTime);
 }
 
 /* OPTIC_FAIL on the channel under way. */
@@ -177,6 +190,7 @@ Ret_t APP_EXEC_Measure_Process(void)
     Ret_t    tOpticErr;
     uint16_t wRead;
     uint32_t dwTime;
+    uint8_t  bUp;
 
     if (s_meas.tJob == MEAS_JOB_NONE)
     {
@@ -242,51 +256,59 @@ Ret_t APP_EXEC_Measure_Process(void)
             /* fall through: first guess for channel 0 */
 
         case MEAS_JOB_TUNE:
-            if (s_meas.bTries != 0u)
+            if (s_meas.bTries == 0u)
             {
-                wRead = Optic_GetRaw((Optic_Ch)s_meas.bCh);
-
-                if ((wRead >= (uint16_t)(APP_OPTIC_TARGET_LIGHT
-                                         - APP_OPTIC_TUNE_TOLERANCE))
-                    && (wRead <= (uint16_t)(APP_OPTIC_TARGET_LIGHT
-                                            + APP_OPTIC_TUNE_TOLERANCE)))
-                {
-                    /* This channel is set; the next starts from scratch. */
-                    s_meas.bCh++;
-                    s_meas.bTries = 0u;
-                    if (s_meas.bCh >= MEAS_CH_USED)
-                    {
-                        s_EndTune(APP_ERR_NONE);
-                        break;
-                    }
-                }
-                else if (s_meas.bTries >= (uint8_t)APP_OPTIC_TUNE_TRIES)
-                {
-                    s_EndTune(s_FailCh());
-                    break;
-                }
-                else
-                {
-                    /* Scale by the shortfall. The curve bends down, so this
-                       never overshoots and closes in from below. */
-                    if (wRead == 0u)
-                    {
-                        wRead = 1u;
-                    }
-                    dwTime = ((uint32_t)s_meas.wTime
-                              * (uint32_t)APP_OPTIC_TARGET_LIGHT) / wRead;
-                    s_TuneTry((dwTime > (uint32_t)APP_OPTIC_TIME_MAX_LOOPS)
-                              ? (uint16_t)APP_OPTIC_TIME_MAX_LOOPS
-                              : (uint16_t)dwTime);
-                    break;
-                }
+                s_TuneFirst();
+                break;
+            }
+            wRead = Optic_GetRaw((Optic_Ch)s_meas.bCh);
+            if (s_meas.bTries == 1u)
+            {
+                /* Second point, 2 x span later on the curve. */
+                s_meas.wY1 = wRead;
+                s_TuneTry((uint16_t)(s_meas.wTime + (2u * APP_OPTIC_TUNE_SPAN)));
+                break;
             }
 
-            /* First guess from the steady reading: tau x 1200 / S. */
-            dwTime = ((uint32_t)APP_OPTIC_TAU_LOOPS
-                      * (uint32_t)APP_OPTIC_TARGET_LIGHT)
-                     / s_meas.awInitial[s_meas.bCh];
-            s_TuneTry((uint16_t)dwTime);
+            /* Both points in: the line through them, solved for 1200.
+               A second reading that is not higher means the sensor does not
+               follow the light - optics fault, as is a time past the cap.
+               One 32-bit product and quotient for the distance from the
+               first point, then up or down by it. */
+            if (wRead <= s_meas.wY1)
+            {
+                s_EndTune(s_FailCh());
+                break;
+            }
+            bUp = (s_meas.wY1 <= (uint16_t)APP_OPTIC_TARGET_LIGHT) ? 1u : 0u;
+            wRead = (uint16_t)(wRead - s_meas.wY1);         /* rise over 2 x span */
+            dwTime = ((uint32_t)((bUp != 0u)
+                                 ? ((uint16_t)APP_OPTIC_TARGET_LIGHT - s_meas.wY1)
+                                 : (s_meas.wY1 - (uint16_t)APP_OPTIC_TARGET_LIGHT))
+                      * (2u * APP_OPTIC_TUNE_SPAN)) / wRead;
+            if (bUp != 0u)
+            {
+                dwTime += s_meas.wTime;
+            }
+            else
+            {
+                dwTime = (dwTime < s_meas.wTime) ? (s_meas.wTime - dwTime) : 1uL;
+            }
+            if (dwTime > (uint32_t)APP_OPTIC_TIME_MAX_LOOPS)
+            {
+                s_EndTune(s_FailCh());
+                break;
+            }
+            (void)Optic_SetTime((Optic_Ch)s_meas.bCh, (uint16_t)dwTime);
+
+            s_meas.bCh++;
+            s_meas.bTries = 0u;
+            if (s_meas.bCh >= MEAS_CH_USED)
+            {
+                s_EndTune(APP_ERR_NONE);
+                break;
+            }
+            s_TuneFirst();
             break;
 
         default:

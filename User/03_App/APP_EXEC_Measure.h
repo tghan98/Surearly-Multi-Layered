@@ -11,9 +11,10 @@
   *   1. Steady sweep, each channel once: CH0 - CH1 - CH2 - CH3 (hs.kim
   *      review D2, 2026-11-10), then the acceptance window 1500..3900.
   *      A stick pulled out during the sweep reads dark and fails here.
-  *   2. Charge-time tuning, channel by channel (2026-11-11): first guess
-  *      tau x 1200 / S, then t x 1200 / reading until a dry stick reads
-  *      1200 +/- 25, at most APP_OPTIC_TUNE_TRIES readings.
+  *   2. Charge-time tuning, channel by channel (hs.kim, 2026-11-12):
+  *      e = 4.5 ms x 1200 / S, one reading each at e - 200 and e + 200
+  *      loops, and the line through them solved for 1200. No check
+  *      reading; about +/-50 from 1200 (APP_OPTIC_TUNE_SPAN).
   * TuneError() then gives the outcome.
   *
   * Stick judgement lives here, not in the Optic module and not in the control
