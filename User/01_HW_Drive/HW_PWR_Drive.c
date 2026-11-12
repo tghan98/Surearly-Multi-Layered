@@ -26,8 +26,13 @@ Ret_t HW_PWR_PrepareHalt(void)
        Floating: the board's 100 kohm resistor is the pull-up. */
     GPIO_Init(HW_PWR_WAKE_PORT, HW_PWR_WAKE_PIN, GPIO_Mode_In_FL_IT);
 
+    /* Falling edge only on pin 1. Written to the register directly:
+       EXTI_SetPinSensitivity() is a 160-byte switch over all eight pins,
+       and this is its EXTI_Pin_1 case, nothing else (2026-11-12, flash). */
     disableInterrupts();
-    EXTI_SetPinSensitivity(HW_PWR_WAKE_EXTI, EXTI_Trigger_Falling);
+    EXTI->CR1 = (uint8_t)((EXTI->CR1 & (uint8_t)~EXTI_CR1_P1IS)
+                          | (uint8_t)((uint8_t)EXTI_Trigger_Falling
+                                      << (uint8_t)HW_PWR_WAKE_EXTI));
     enableInterrupts();
 
     /* Ultra-low-power regulator: this is most of the 382 uA -> 71 uA step. */
