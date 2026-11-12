@@ -108,16 +108,19 @@
 #define APP_REACTION_WAIT_TK     ((uint16_t)(APP_BLINK_TO_RESULT_TK \
                                              - APP_LOW_SAMPLE_CHECK_TK))
 
-/* How often the stick is re-checked for removal.
-   The old FW declared 250 ms, but two throttles in series made the interval
-   that shipped 6.25 s, and the port first kept that (2026-11-03). In
-   production a pulled stick then took over 6 s to notice, and which error
-   showed depended on the moment it was pulled (2026-11-06).
-   Now a check of its own every 500 ms, from the end of gain tuning to the
-   start of the result scan (hs.kim review D6, 2026-11-10). 250 ms would
-   react sooner but fires the LED twice as often; 500 ms is the agreed
-   floor. */
-#define APP_STICK_CHECK_INTERVAL_TK  HW_TICK_MS(500u)
+/* Stick removal: the switch AND the optics (hs.kim, 2026-11-11).
+   Either one alone raises false removals. The optics: as the colour
+   develops the whole strip turns red and darkens, much as a pulled stick
+   does. The switch: its contact lets go now and then with the stick in.
+   So the stick counts as removed only when both say so.
+   The switch is read on every 10 ms pass and judged in windows of 25 reads
+   (250 ms): 20 or more low is "in", and the optics are not fired at all.
+   Fewer starts one optical check of C; a dark C is one strike, and the
+   check repeats at once. Two strikes in a row are a removal. A good window
+   or a bright C clears the strikes. */
+#define APP_STICK_SW_WINDOW                25u
+#define APP_STICK_SW_PASS                  20u
+#define APP_STICK_STRIKES                   2u
 
 /* Test build: worst-case log (2026-11-11, hs.kim). 1 builds a test FW that
    does NOT end a run on stick removal. Instead, from the end of gain tuning

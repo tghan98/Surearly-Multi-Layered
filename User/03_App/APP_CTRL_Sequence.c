@@ -83,8 +83,10 @@ typedef struct
     uint16_t               wTestRunMax;  /* longest stretch                */
     uint8_t                bTestCh;      /* channel the next read takes    */
 #endif
-    uint8_t                bSwReads;     /* switch reads taken after wake  */
+    uint8_t                bSwReads;     /* switch reads in this window    */
     uint8_t                bSwLow;       /* of those, reads that were low  */
+    uint8_t                bSwOpenRun;   /* windows in a row judged open   */
+    uint8_t                bStrikes;     /* open window + dark C, in a row */
 } Seq_Ctx;
 
 /* Private variables ---------------------------------------------------------*/
@@ -208,6 +210,8 @@ static void s_ClearRun(void)
     s_seq.tError     = APP_ERR_NONE;
     s_seq.bErrorStep = 0u;
     s_seq.bChecking  = 0u;
+    s_seq.bSwOpenRun = 0u;
+    s_seq.bStrikes   = 0u;
 #if (APP_TEST_MINLOG == 1)
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
@@ -374,10 +378,8 @@ static void s_StepStickInsert(void)
             (void)Lcd_PlayAnim(s_animStickInsert,
                                (uint8_t)SEQ_ANIM_INSERT_STEPS, 0u);
 
-            /* Charge times are set: the removal check can judge from here on, and
-               its first check is due at once (review D6). */
-            s_seq.wStickStart = (uint16_t)(HW_Tick_Get()
-                                           - APP_STICK_CHECK_INTERVAL_TK);
+            /* Charge times are set: the removal check can judge from here
+               on (review D6). */
             s_seq.bChecking   = 0u;
             s_seq.tPhase = SEQ_PH_ANIM;
             break;
@@ -430,12 +432,15 @@ static uint8_t s_Sleep(void)
     return 1u;
 }
 
-/* Stick removal check, every 500 ms, run ahead of the step on every pass.
-   It is separate from the steps so that neither a running animation nor a
-   step's own timing can delay it (hs.kim, 2026-11-10):
+/* Stick removal check, run ahead of the step on every 10 ms pass. It is
+   separate from the steps so that neither a running animation nor a step's
+   own timing can delay it (hs.kim, 2026-11-10):
      STICK_INSERT animation, SAMPLE_LOAD_WAIT -> STICK_REMOVE (BOOK + DROP)
      OVER/LOW_SAMPLE_CHECK, REACTION_WAIT     -> STICK_FAIL   (BOOK)
-   A new check starts only while the step is in its WAIT (or animation)
+   Removed means the switch AND the optics say so, see APP_STICK_SW_WINDOW
+   (hs.kim, 2026-11-11). The wake check's two counters carry straight on as
+   the first window: they are the same switch's history.
+   An optical check starts only while the step is in its WAIT (or animation)
    phase, never while the step measures a channel itself (review D7), so the
    two never compete for the optics. The result is taken on the first pass
    after the check finishes, before the step can start anything new. */
@@ -445,6 +450,8 @@ static void s_RemoveCheck(void)
     APP_DATA_ErrorCode tErr = APP_ERR_STICK_FAIL;
 #if (APP_TEST_MINLOG == 1)
     uint16_t           wTest;
+#else
+    uint8_t            bStart = 0u;
 #endif
 
     switch (s_seq.tStep)
@@ -520,6 +527,39 @@ static void s_RemoveCheck(void)
         s_seq.bChecking   = 1u;
     }
 #else
+    if (s_seq.tStep == APP_SEQ_IDLE)
+    {
+        return;         /* the wake check owns the two counters there */
+    }
+
+    /* The switch, one read per pass, judged every window. It is read while
+       an optical check runs too, so that a contact that closes again is
+       seen before the check's answer is used. */
+    if (HW_GPIO_Read(HW_GPIO_STICK_SW) == HW_GPIO_LEVEL_LOW)
+    {
+        s_seq.bSwLow++;
+    }
+    s_seq.bSwReads++;
+    if (s_seq.bSwReads >= (uint8_t)APP_STICK_SW_WINDOW)
+    {
+        if (s_seq.bSwLow >= (uint8_t)APP_STICK_SW_PASS)
+        {
+            s_seq.bSwOpenRun = 0u;
+        }
+        else
+        {
+            if (s_seq.bSwOpenRun < 0xFFu)
+            {
+                s_seq.bSwOpenRun++;
+            }
+            bStart = 1u;
+        }
+        s_seq.bSwReads = 0u;
+        s_seq.bSwLow   = 0u;
+    }
+
+    /* The optical check that was started. A dark C is a strike only while
+       the switch still reads open; two in a row are a removal. */
     if (s_seq.bChecking != 0u)
     {
         if (APP_EXEC_Measure_IsBusy() != 0u)
@@ -527,22 +567,27 @@ static void s_RemoveCheck(void)
             return;
         }
         s_seq.bChecking = 0u;
-        if ((bActive != 0u) && (APP_EXEC_Measure_IsStickPresent() == 0u))
+        if ((bActive != 0u) && (s_seq.bSwOpenRun != 0u)
+            && (APP_EXEC_Measure_IsStickPresent() == 0u))
         {
-            s_SequenceError(tErr);
+            s_seq.bStrikes++;
+            if (s_seq.bStrikes >= (uint8_t)APP_STICK_STRIKES)
+            {
+                s_SequenceError(tErr);
+                return;
+            }
+            bStart = 1u;            /* look again without waiting */
         }
-        return;
+        else
+        {
+            s_seq.bStrikes = 0u;
+        }
     }
 
-    if ((bActive == 0u)
-        || (HW_Tick_Elapsed(s_seq.wStickStart) < APP_STICK_CHECK_INTERVAL_TK))
+    if ((bStart != 0u) && (bActive != 0u)
+        && (APP_EXEC_Measure_StartStickCheck() == RET_OK))
     {
-        return;
-    }
-    if (APP_EXEC_Measure_StartStickCheck() == RET_OK)
-    {
-        s_seq.wStickStart = HW_Tick_Get();
-        s_seq.bChecking   = 1u;
+        s_seq.bChecking = 1u;
     }
 #endif
 }
