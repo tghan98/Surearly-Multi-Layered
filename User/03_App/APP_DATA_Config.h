@@ -122,6 +122,15 @@
 #define APP_STICK_SW_PASS                  20u
 #define APP_STICK_STRIKES                   2u
 
+/* "Sample arrived" is a drop in T against BT, and a stick being pulled out
+   darkens both, which passes for the same drop (bench dumps 2026-11-06,
+   defect 1). So the run does not move on at once: it holds for about a
+   second with the removal check running, and only a stick that is still in
+   goes on to the volume checks (hs.kim, 2026-11-11). The over-sample wait is
+   shortened by the same second, so C is still read again 5 s after arrival
+   and DROP starts blinking when it did before. */
+#define APP_ARRIVAL_HOLD_TK          HW_TICK_MS(1000u)
+
 /* Test build: worst-case log (2026-11-11, hs.kim). 1 builds a test FW that
    does NOT end a run on stick removal. Instead, from the end of gain tuning
    to the result scan, it reads one channel every 250 ms in turn and keeps

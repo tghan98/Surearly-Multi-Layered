@@ -48,6 +48,7 @@ typedef enum
     SEQ_PH_SAVE,
     SEQ_PH_SAVED,
     SEQ_PH_ANIM,           /* waiting for an LCD animation to finish */
+    SEQ_PH_HOLD,           /* sample seen: is the stick still in?   */
     SEQ_PH_COUNT
 } Seq_Phase;
 
@@ -462,7 +463,8 @@ static void s_RemoveCheck(void)
             break;
 
         case APP_SEQ_SAMPLE_LOAD_WAIT:
-            bActive = (s_seq.tPhase == SEQ_PH_WAIT) ? 1u : 0u;
+            bActive = ((s_seq.tPhase == SEQ_PH_WAIT)
+                       || (s_seq.tPhase == SEQ_PH_HOLD)) ? 1u : 0u;
             tErr    = APP_ERR_STICK_REMOVE;
             break;
 
@@ -712,26 +714,23 @@ static void s_StepSampleLoadWait(void)
             s_seq.bChannel++;
             if (s_seq.bChannel == (uint8_t)OPTIC_CH_COUNT)
             {
-                /* "Sample arrived" is a drop in T against BT, and a stick
-                   pulled out darkens both, which can pass for the same drop
-                   (bench dumps 2026-11-06, defect 1). The C reading taken
-                   just now settles it: a stick still in reads C >= 556 even
-                   wet (wettest finished runs 743..1143), a pulled one does
-                   not. Without this the run went on to the volume checks and
-                   ended as STICK_FAIL (BOOK only) instead of STICK_REMOVE. */
-                if (s_seq.awScaled[OPTIC_CH_C]
-                    < (uint16_t)APP_OPTIC_STICK_THRESHOLD_SCALED)
-                {
-                    s_SequenceError(APP_ERR_STICK_REMOVE);
-                }
-                else
-                {
-                    s_GoStep(APP_SEQ_OVER_SAMPLE_CHECK);
-                }
+                /* Not on to the volume checks yet: a pulled stick looks
+                   like an arriving sample. Hold, and let the removal check
+                   say STICK_REMOVE if that is what happened
+                   (APP_ARRIVAL_HOLD_TK). */
+                s_seq.wStart = HW_Tick_Get();
+                s_seq.tPhase = SEQ_PH_HOLD;
             }
             else
             {
                 s_seq.tPhase = SEQ_PH_START_CHANNEL;
+            }
+            break;
+
+        case SEQ_PH_HOLD:
+            if (HW_Tick_Elapsed(s_seq.wStart) >= APP_ARRIVAL_HOLD_TK)
+            {
+                s_GoStep(APP_SEQ_OVER_SAMPLE_CHECK);
             }
             break;
 
@@ -814,7 +813,8 @@ static void s_SampleCheck(uint16_t wWait, uint16_t wBase, uint16_t wRatio,
 /* ---- Steps 4 and 5: OVER_SAMPLE_CHECK, LOW_SAMPLE_CHECK -------------------*/
 static void s_StepOverSampleCheck(void)
 {
-    s_SampleCheck(APP_OVER_SAMPLE_CHECK_TK, s_seq.awResultBand[OPTIC_CH_C],
+    s_SampleCheck((uint16_t)(APP_OVER_SAMPLE_CHECK_TK - APP_ARRIVAL_HOLD_TK),
+                  s_seq.awResultBand[OPTIC_CH_C],
                   APP_OVER_FLOW_RATIO, APP_SEQ_LOW_SAMPLE_CHECK, APP_ERR_OVER_FLOW);
 
     /* DROP starts blinking the moment the over-sample check passes, not at
