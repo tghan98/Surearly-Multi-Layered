@@ -261,6 +261,20 @@ Ret_t APP_EXEC_Measure_Process(void)
                 s_TuneFirst();
                 break;
             }
+            if (s_meas.bTries >= 3u)
+            {
+                /* Dry reading in (five, at the tuned time): it is what
+                   GetTunedSet hands on as the empty value. Next channel. */
+                s_meas.bCh++;
+                s_meas.bTries = 0u;
+                if (s_meas.bCh >= MEAS_CH_USED)
+                {
+                    s_EndTune(APP_ERR_NONE);
+                    break;
+                }
+                s_TuneFirst();
+                break;
+            }
             wRead = Optic_GetRaw((Optic_Ch)s_meas.bCh);
             if (s_meas.bTries == 1u)
             {
@@ -301,14 +315,12 @@ Ret_t APP_EXEC_Measure_Process(void)
             }
             (void)Optic_SetTime((Optic_Ch)s_meas.bCh, (uint16_t)dwTime);
 
-            s_meas.bCh++;
-            s_meas.bTries = 0u;
-            if (s_meas.bCh >= MEAS_CH_USED)
-            {
-                s_EndTune(APP_ERR_NONE);
-                break;
-            }
-            s_TuneFirst();
+            /* The dry (empty) reading at the time just set, five readings as
+               every measurement. Without it the empty value left in Optic
+               was the second tuning point, 100..300 below 1200
+               (스틱책 7번, 2026-11-12 19:30 dump). */
+            s_meas.bTries = 3u;
+            (void)s_StartOptic((Optic_Ch)s_meas.bCh);
             break;
 
         default:
