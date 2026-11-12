@@ -26,10 +26,14 @@ Ret_t HW_Tick_Init(void)
 {
     CLK_PeripheralClockConfig(CLK_Peripheral_TIM4, ENABLE);
 
-    TIM4_TimeBaseInit(HW_TICK_PRESCALER, (uint8_t)HW_TICK_ARR);
-    TIM4_ClearFlag(TIM4_FLAG_Update);
-    TIM4_ITConfig(TIM4_IT_Update, ENABLE);
-    TIM4_Cmd(ENABLE);
+    /* What TIM4_TimeBaseInit/ClearFlag/ITConfig/Cmd do, written directly
+       (2026-11-12, flash). The update event loads the prescaler now. */
+    TIM4->ARR  = (uint8_t)HW_TICK_ARR;
+    TIM4->PSCR = (uint8_t)HW_TICK_PRESCALER;
+    TIM4->EGR  = (uint8_t)TIM4_EventSource_Update;
+    TIM4->SR1  = (uint8_t)~(uint8_t)TIM4_FLAG_Update;
+    TIM4->IER |= (uint8_t)TIM4_IT_Update;
+    TIM4->CR1 |= TIM4_CR1_CEN;
 
     return RET_OK;
 }
@@ -95,7 +99,7 @@ HW_Tick_Due HW_Tick_IsDue(uint16_t *p_wLast, uint16_t wPeriod)
 void HW_Tick_Isr(void)
 {
     s_wTick++;
-    TIM4_ClearITPendingBit(TIM4_IT_Update);
+    TIM4->SR1 = (uint8_t)~(uint8_t)TIM4_IT_Update;
 }
 
 /*****************************END OF FILE****/

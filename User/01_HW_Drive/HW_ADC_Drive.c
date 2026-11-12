@@ -13,12 +13,18 @@
 #include "stm8l15x_clk.h"
 
 /* Private variables ---------------------------------------------------------*/
-/* Logical ID -> vendor channel. The only place channel numbers live. */
-static const ADC_Channel_TypeDef s_map[HW_ADC_COUNT] =
+/* Logical ID -> vendor channel. The only place channel numbers live.
+   A channel code is register index (high byte) and bit (low byte); all three
+   sit in the same SQR register, so only the bit is kept. The per-read paths
+   write the registers directly instead of calling ADC_ChannelCmd(),
+   ADC_GetFlagStatus(), ADC_GetConversionValue() and ADC_Cmd(): the same
+   register operations, 87 bytes of library code (2026-11-12, flash). */
+#define HW_ADC_SQR_IDX   ((uint8_t)((uint16_t)ADC_Channel_11 >> 8))
+static const uint8_t s_map[HW_ADC_COUNT] =
 {
-    [HW_ADC_FRNT] = ADC_Channel_13,   /* old ADC_IDD_FRNT_CHANNEL */
-    [HW_ADC_MIDL] = ADC_Channel_12,   /* old ADC_IDD_MIDL_CHANNEL */
-    [HW_ADC_REAR] = ADC_Channel_11    /* old ADC_IDD_REAR_CHANNEL */
+    [HW_ADC_FRNT] = (uint8_t)ADC_Channel_13,   /* old ADC_IDD_FRNT_CHANNEL */
+    [HW_ADC_MIDL] = (uint8_t)ADC_Channel_12,   /* old ADC_IDD_MIDL_CHANNEL */
+    [HW_ADC_REAR] = (uint8_t)ADC_Channel_11    /* old ADC_IDD_REAR_CHANNEL */
 };
 
 static uint8_t s_bEnabled = 0u;
@@ -49,7 +55,7 @@ Ret_t HW_ADC_Init(void)
         (uint8_t)((uint8_t)ADC_Channel_11 | (uint8_t)ADC_Channel_12
                   | (uint8_t)ADC_Channel_13);
 
-    ADC_Cmd(ADC1, DISABLE);
+    ADC1->CR1 &= (uint8_t)~ADC_CR1_ADON;
     CLK_PeripheralClockConfig(CLK_Peripheral_ADC1, DISABLE);
     s_bEnabled = 0u;
 
@@ -59,7 +65,7 @@ Ret_t HW_ADC_Init(void)
 Ret_t HW_ADC_Enable(void)
 {
     CLK_PeripheralClockConfig(CLK_Peripheral_ADC1, ENABLE);
-    ADC_Cmd(ADC1, ENABLE);
+    ADC1->CR1 |= ADC_CR1_ADON;
     s_bEnabled = 1u;
 
     return RET_OK;
@@ -67,7 +73,7 @@ Ret_t HW_ADC_Enable(void)
 
 Ret_t HW_ADC_Disable(void)
 {
-    ADC_Cmd(ADC1, DISABLE);
+    ADC1->CR1 &= (uint8_t)~ADC_CR1_ADON;
     CLK_PeripheralClockConfig(CLK_Peripheral_ADC1, DISABLE);
     s_bEnabled = 0u;
 
@@ -85,14 +91,14 @@ Ret_t HW_ADC_Select(HW_ADC_Id tId)
         return RET_ERR_NOT_INIT;
     }
 
-    ADC_ChannelCmd(ADC1, s_map[tId], ENABLE);
+    ADC1->SQR[HW_ADC_SQR_IDX] |= s_map[tId];
 
     return RET_OK;
 }
 
 void HW_ADC_Start(void)
 {
-    ADC_SoftwareStartConv(ADC1);
+    ADC1->CR1 |= ADC_CR1_START;
 }
 
 Ret_t HW_ADC_Fetch(HW_ADC_Id tId, uint16_t *p_wOut)
@@ -103,17 +109,19 @@ Ret_t HW_ADC_Fetch(HW_ADC_Id tId, uint16_t *p_wOut)
     wStart = HW_Tick_Get();
     while (HW_Tick_Elapsed(wStart) <= HW_ADC_CONV_TIMEOUT_TK)
     {
-        if (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) != RESET)
+        if ((ADC1->SR & (uint8_t)ADC_FLAG_EOC) != 0u)
         {
-            /* Reading the result clears EOC. */
-            *p_wOut = ADC_GetConversionValue(ADC1);
+            /* Reading the result clears EOC. High byte first, as the
+               library did. */
+            *p_wOut = (uint16_t)((uint16_t)ADC1->DRH << 8);
+            *p_wOut |= ADC1->DRL;
             tRet = RET_OK;
             break;
         }
     }
 
     /* One analog input connected at a time, whatever the outcome. */
-    ADC_ChannelCmd(ADC1, s_map[tId], DISABLE);
+    ADC1->SQR[HW_ADC_SQR_IDX] &= (uint8_t)~s_map[tId];
 
     return tRet;
 }
