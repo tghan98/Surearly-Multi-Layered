@@ -111,14 +111,24 @@ Ret_t APP_EXEC_Measure_Abort(void);
 APP_DATA_ErrorCode APP_EXEC_Measure_TuneError(void);
 
 /**
-  * @brief  Fills a buffer with the last tuned reading of each channel
-  *         (about 1200 each), then zeros to APP_EXEC_MEASURE_INITIAL_WORDS.
+  * @brief  Fills a buffer with the dry reading of each channel at its tuned
+  *         time (about 1200 each), then zeros to APP_EXEC_MEASURE_INITIAL_WORDS.
+  *         Valid once the StartInitial() job is no longer busy.
   * @param  p_wOut : APP_EXEC_MEASURE_INITIAL_WORDS words, must not be NULL
   * @note   Layer: App (exec). Blocking: no. ISR: no.
   */
 void APP_EXEC_Measure_GetTunedSet(uint16_t *p_wOut);
 
 /* Getters (cannot fail) -----------------------------------------------------*/
+/**
+  * @brief  Whether the StartInitial() job is still on its steady sweep and
+  *         acceptance window. After it the job either has ended (window
+  *         failed) or goes on tuning and taking the dry readings.
+  * @note   Layer: App (exec). Blocking: no. ISR: no.
+  * @retval 1: sweeping, 0: not
+  */
+uint8_t APP_EXEC_Measure_IsSweeping(void);
+
 /**
   * @brief  How the running or last procedure ended.
   * @note   Layer: App (exec). Blocking: no. ISR: no.

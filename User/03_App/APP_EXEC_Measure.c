@@ -34,6 +34,7 @@ typedef struct
     uint16_t                wY1;          /* reading at the first point   */
     APP_DATA_ErrorCode      tErr;         /* outcome of sweep and tuning  */
     uint16_t                awInitial[APP_EXEC_MEASURE_INITIAL_WORDS];
+    uint16_t                awEmpty[MEAS_CH_USED];   /* dry, tuned time */
 } Meas_Ctx;
 
 /* Private variables ---------------------------------------------------------*/
@@ -55,11 +56,8 @@ static APP_DATA_ErrorCode s_FailCh(void);
 /* One tuning reading of the current channel at wTime loops. */
 static void s_TuneTry(uint16_t wTime)
 {
-    /* 0 would mean a steady reading to Optic, and 65536 loops to the CPU. */
-    if (wTime == 0u)
-    {
-        wTime = 1u;
-    }
+    /* Never 0 (a steady reading to Optic, 65536 loops to the CPU): the first
+       point is at least 3000 x 1200 / 3900 - 200 = 723, the second higher. */
     s_meas.bTries++;
     (void)Optic_SetTime((Optic_Ch)s_meas.bCh, wTime);
     (void)Optic_StartOnce((Optic_Ch)s_meas.bCh);
@@ -264,7 +262,10 @@ Ret_t APP_EXEC_Measure_Process(void)
             if (s_meas.bTries >= 3u)
             {
                 /* Dry reading in (five, at the tuned time): it is what
-                   GetTunedSet hands on as the empty value. Next channel. */
+                   GetTunedSet hands on as the empty value. Kept here, as
+                   the removal check may read C again before the sequence
+                   asks (tuning runs behind the insert animation). */
+                s_meas.awEmpty[s_meas.bCh] = Optic_GetRaw((Optic_Ch)s_meas.bCh);
                 s_meas.bCh++;
                 s_meas.bTries = 0u;
                 if (s_meas.bCh >= MEAS_CH_USED)
@@ -355,13 +356,18 @@ void APP_EXEC_Measure_GetTunedSet(uint16_t *p_wOut)
 
     for (bCh = 0u; bCh < (uint8_t)APP_EXEC_MEASURE_INITIAL_WORDS; bCh++)
     {
-        p_wOut[bCh] = (bCh < MEAS_CH_USED) ? Optic_GetRaw((Optic_Ch)bCh) : 0u;
+        p_wOut[bCh] = (bCh < MEAS_CH_USED) ? s_meas.awEmpty[bCh] : 0u;
     }
 }
 
 APP_EXEC_Measure_Result APP_EXEC_Measure_GetResult(void)
 {
     return s_meas.tResult;
+}
+
+uint8_t APP_EXEC_Measure_IsSweeping(void)
+{
+    return (s_meas.tJob == MEAS_JOB_INITIAL) ? 1u : 0u;
 }
 
 uint8_t APP_EXEC_Measure_IsBusy(void)

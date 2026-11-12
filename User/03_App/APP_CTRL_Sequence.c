@@ -349,14 +349,19 @@ static void s_StepStickInsert(void)
             break;
 
         case SEQ_PH_WAIT:
-            if (APP_EXEC_Measure_IsBusy() != 0u)
+            /* The animation starts as soon as the steady sweep has passed
+               its acceptance window: that is the only book shown before it
+               (hs.kim 2026-11-12 02:17). The tuning and the dry readings,
+               about 0.85 s, run behind the animation, as the old FW measured
+               behind the DROP icon. (2026-11-12 evening, blank screen
+               1.0 s -> 0.2 s) */
+            if (APP_EXEC_Measure_IsSweeping() != 0u)
             {
                 break;
             }
 
-            /* The job ran the steady sweep, the acceptance window and the
-               charge-time tuning; a failed conversion is reported as
-               OPTIC_FAIL on the channel it hit, like the rest. */
+            /* Sweep over: failed its window (or a conversion failed) and
+               ended with OPTIC_FAIL on the channel it hit, or tuning. */
             (void)APP_DATA_Record_SetStickPtr(APP_EXEC_Measure_GetInitial());
 #if (APP_TEST_MINLOG == 0)
             if (APP_DATA_Record_GetInsertCount() <= (uint8_t)SEQ_QC_REF_INSERTS)
@@ -366,7 +371,6 @@ static void s_StepStickInsert(void)
 #endif
 
             tErr = APP_EXEC_Measure_TuneError();
-            APP_EXEC_Measure_GetTunedSet(s_seq.awScaled);
             if (tErr != APP_ERR_NONE)
             {
                 s_EnterError(tErr);
@@ -379,8 +383,9 @@ static void s_StepStickInsert(void)
             (void)Lcd_PlayAnim(s_animStickInsert,
                                (uint8_t)SEQ_ANIM_INSERT_STEPS, 0u);
 
-            /* Charge times are set: the removal check can judge from here
-               on (review D6). */
+            /* The removal check runs from here on (review D6), but cannot
+               start an optical check until the tuning has finished: the
+               measure job is busy until then. */
             s_seq.bChecking   = 0u;
             s_seq.tPhase = SEQ_PH_ANIM;
             break;
@@ -390,6 +395,20 @@ static void s_StepStickInsert(void)
             {
                 break;
             }
+            /* The tuning is long done (0.85 s of a 4.5 s animation); busy
+               here is a removal check, wait for it too. A conversion that
+               failed during the tuning is still an optics fault. */
+            if (APP_EXEC_Measure_IsBusy() != 0u)
+            {
+                break;
+            }
+            tErr = APP_EXEC_Measure_TuneError();
+            if (tErr != APP_ERR_NONE)
+            {
+                s_EnterError(tErr);
+                break;
+            }
+            APP_EXEC_Measure_GetTunedSet(s_seq.awScaled);
 
             /* The stick is in (the optics say so, or the removal check would
                have ended the run) but the switch has stayed open: a contact
