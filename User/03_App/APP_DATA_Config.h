@@ -91,7 +91,18 @@
 #define APP_SCAN_MAX_COUNT                 30u   /* old _nSCAN_MAX_CNT         */
 
 /* Sequence timing (ticks, written as milliseconds) ---------------------------*/
+/* Test build: short error screen (2026-11-12). 1 holds an error for 10 s
+   instead of 2 min, so that repeated insert/pull tests on many units do not
+   spend most of their time waiting. Nothing else changes. Keep 0 for
+   production. */
+#ifndef APP_TEST_FAST_ERR
+#define APP_TEST_FAST_ERR                   0
+#endif
+#if (APP_TEST_FAST_ERR == 1)
+#define APP_ERR_RUN_TIME_TK        HW_TICK_MS(10000uL)
+#else
 #define APP_ERR_RUN_TIME_TK        HW_TICK_MS(120000uL) /* old ERR_RUN_TIME        12000 */
+#endif
 #define APP_SAMPLE_LOAD_WAIT_TK    HW_TICK_MS(300000uL) /* old SAMPLE_LOAD_WAIT_TIME 30000 */
 #define APP_OVER_SAMPLE_CHECK_TK   HW_TICK_MS(  5000uL) /* old OVER_SAMPLE_CHECK_TIME  500 */
 #define APP_LOW_SAMPLE_CHECK_TK    HW_TICK_MS( 20000uL) /* old LOW_SAMPLE_CHECK_TIME  2000 */
