@@ -285,33 +285,38 @@ Ret_t APP_EXEC_Measure_Process(void)
             }
 
             /* Both points in: the line through them, solved for 1200.
-               A second reading that is not higher means the sensor does not
-               follow the light - optics fault, as is a time past the cap.
                One 32-bit product and quotient for the distance from the
-               first point, then up or down by it. */
+               first point, then up or down by it.
+               No book from the tuning (hs.kim 2026-11-12 02:17: only the
+               steady readings outside 1500..3900 show it before the
+               animation; to be confirmed in his review 11-13). A second
+               reading that is not higher leaves no line: the estimate e
+               (between the two points) is used. A time past the cap is
+               held at the cap. */
             if (wRead <= s_meas.wY1)
             {
-                s_EndTune(s_FailCh());
-                break;
-            }
-            bUp = (s_meas.wY1 <= (uint16_t)APP_OPTIC_TARGET_LIGHT) ? 1u : 0u;
-            wRead = (uint16_t)(wRead - s_meas.wY1);         /* rise over 2 x span */
-            dwTime = ((uint32_t)((bUp != 0u)
-                                 ? ((uint16_t)APP_OPTIC_TARGET_LIGHT - s_meas.wY1)
-                                 : (s_meas.wY1 - (uint16_t)APP_OPTIC_TARGET_LIGHT))
-                      * (2u * APP_OPTIC_TUNE_SPAN)) / wRead;
-            if (bUp != 0u)
-            {
-                dwTime += s_meas.wTime;
+                dwTime = (uint32_t)s_meas.wTime + APP_OPTIC_TUNE_SPAN;
             }
             else
             {
-                dwTime = (dwTime < s_meas.wTime) ? (s_meas.wTime - dwTime) : 1uL;
+                bUp = (s_meas.wY1 <= (uint16_t)APP_OPTIC_TARGET_LIGHT) ? 1u : 0u;
+                wRead = (uint16_t)(wRead - s_meas.wY1);         /* rise over 2 x span */
+                dwTime = ((uint32_t)((bUp != 0u)
+                                     ? ((uint16_t)APP_OPTIC_TARGET_LIGHT - s_meas.wY1)
+                                     : (s_meas.wY1 - (uint16_t)APP_OPTIC_TARGET_LIGHT))
+                          * (2u * APP_OPTIC_TUNE_SPAN)) / wRead;
+                if (bUp != 0u)
+                {
+                    dwTime += s_meas.wTime;
+                }
+                else
+                {
+                    dwTime = (dwTime < s_meas.wTime) ? (s_meas.wTime - dwTime) : 1uL;
+                }
             }
             if (dwTime > (uint32_t)APP_OPTIC_TIME_MAX_LOOPS)
             {
-                s_EndTune(s_FailCh());
-                break;
+                dwTime = (uint32_t)APP_OPTIC_TIME_MAX_LOOPS;
             }
             (void)Optic_SetTime((Optic_Ch)s_meas.bCh, (uint16_t)dwTime);
 
