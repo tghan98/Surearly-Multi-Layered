@@ -31,7 +31,7 @@
 
 /* Version -------------------------------------------------------------------*/
 #define APP_VER_LABEL            "v2.1"       /* old _strFIRMWARE_VER, 4 bytes  */
-#define APP_VER_BUILD            "v2.1.1.2"   /* old _REAL_FIRMWARE_VER, 8 bytes*/
+#define APP_VER_BUILD            "v2.1.1.3"   /* old _REAL_FIRMWARE_VER, 8 bytes*/
 #define APP_LOT_PREFIX           "HCGM"       /* old _strLOT_UPPER_4CHAR        */
 #define APP_LOT_SUFFIX           "19001"      /* old _strLOT_LOWER_5NUM         */
 
