@@ -368,7 +368,7 @@ static void s_StepStickInsert(void)
                 break;
             }
 
-            /* Readings good: now the insert animation, about 4.5 s. The old
+            /* Readings good: now the insert animation, 5.0 s. The old
                FW waited for it before asking for the sample, so this does
                too. */
             (void)Lcd_PlayAnim(s_animStickInsert,

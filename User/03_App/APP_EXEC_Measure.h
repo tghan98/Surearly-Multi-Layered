@@ -7,14 +7,20 @@
   * the test sequence needs: the initial sweep with charge-time tuning, and
   * the stick-present judgement.
   *
-  * StartInitial() runs one job in two parts:
+  * StartInitial() runs one job in three parts:
   *   1. Steady sweep, each channel once: CH0 - CH1 - CH2 - CH3 (hs.kim
   *      review D2, 2026-11-10), then the acceptance window 1500..3900.
   *      A stick pulled out during the sweep reads dark and fails here.
+  *      Outside the window: OPTIC_FAIL, the only book before the insert
+  *      animation. IsSweeping() is 1 until this part is over.
   *   2. Charge-time tuning, channel by channel (hs.kim, 2026-11-12):
   *      e = 4.5 ms x 1200 / S, one reading each at e - 200 and e + 200
   *      loops, and the line through them solved for 1200. No check
-  *      reading; about +/-50 from 1200 (APP_OPTIC_TUNE_SPAN).
+  *      reading. Never fails: no line (second reading not higher) takes e,
+  *      past APP_OPTIC_TIME_MAX_LOOPS takes the cap (2026-11-12 evening).
+  *   3. The dry (empty) reading of the channel at that time, five readings,
+  *      kept for GetTunedSet(). Bench 2026-11-12/13: 1135..1208.
+  *   Parts 2 and 3 run behind the insert animation (about 0.85 s).
   * TuneError() then gives the outcome.
   *
   * Stick judgement lives here, not in the Optic module and not in the control
@@ -102,8 +108,8 @@ Ret_t APP_EXEC_Measure_Process(void);
 Ret_t APP_EXEC_Measure_Abort(void);
 
 /**
-  * @brief  Outcome of the last StartInitial() job: the acceptance window,
-  *         the tuning, or a failed conversion.
+  * @brief  Outcome of the last StartInitial() job: the acceptance window
+  *         or a failed conversion (the tuning itself does not fail).
   * @note   Layer: App (exec). Blocking: no. ISR: no.
   *         Read after the job is no longer busy.
   * @retval APP_ERR_NONE, or APP_ERR_OPTIC_FAIL_CHn for the channel that failed

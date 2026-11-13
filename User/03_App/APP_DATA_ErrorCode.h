@@ -28,7 +28,7 @@ typedef enum
     APP_ERR_OVER_USED        = 0x05,  /* more than APP_SCAN_MAX_COUNT runs     */
     APP_ERR_C_LINE_FAIL      = 0x06,  /* control line below threshold          */
     APP_ERR_SAMPLE_LOAD_FAIL = 0x07,  /* no sample within the load window      */
-    APP_ERR_OPTIC_FAIL_CH0   = 0x10,  /* channel tuning failed                 */
+    APP_ERR_OPTIC_FAIL_CH0   = 0x10,  /* steady reading out of range, or ADC   */
     APP_ERR_OPTIC_FAIL_CH1   = 0x11,
     APP_ERR_OPTIC_FAIL_CH2   = 0x12,
     APP_ERR_OPTIC_FAIL_CH3   = 0x13
