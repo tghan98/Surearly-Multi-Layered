@@ -161,6 +161,9 @@ Ret_t APP_EXEC_Measure_StartStickCheck(void)
 
     s_meas.tJob    = MEAS_JOB_STICK;
     s_meas.tResult = APP_EXEC_MEASURE_RUNNING;
+    /* For s_FailCh(): after the tuning bCh is 4, and 0x10 + 4 is no error
+       code (hs.kim review B1, 2026-11-13). */
+    s_meas.bCh     = (uint8_t)OPTIC_CH_C;
 
     return s_StartOptic(OPTIC_CH_C);
 }
@@ -199,8 +202,10 @@ Ret_t APP_EXEC_Measure_Process(void)
         return RET_OK;
     }
 
-    /* A failed conversion ends the whole procedure. In the sweep or the
-       tuning it is reported as OPTIC_FAIL on the channel it hit. */
+    /* A failed conversion ends the job, reported as OPTIC_FAIL on the
+       channel it hit (bCh is that channel in every job). The sequence
+       turns FAILED into the error in any step (hs.kim review B1/B2,
+       2026-11-13). */
     if (Optic_TakeError(&tOpticErr) != 0u)
     {
         s_meas.tErr    = s_FailCh();

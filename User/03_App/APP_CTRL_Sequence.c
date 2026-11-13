@@ -386,17 +386,11 @@ static void s_StepStickInsert(void)
             {
                 break;
             }
-            /* The tuning is long done (0.85 s of a 4.5 s animation); busy
+            /* The tuning is long done (0.85 s of a 5.0 s animation); busy
                here is a removal check, wait for it too. A conversion that
-               failed during the tuning is still an optics fault. */
+               failed has already ended the run (APP_CTRL_Sequence_Process). */
             if (APP_EXEC_Measure_IsBusy() != 0u)
             {
-                break;
-            }
-            tErr = APP_EXEC_Measure_TuneError();
-            if (tErr != APP_ERR_NONE)
-            {
-                s_EnterError(tErr);
                 break;
             }
             APP_EXEC_Measure_GetTunedSet(s_seq.awScaled);
@@ -574,6 +568,21 @@ static void s_RemoveCheck(void)
                 s_seq.bSwOpenRun++;
             }
             bStart = 1u;
+
+            /* During the tuning (the first ~0.85 s of the insert animation)
+               no optical check can run, and a stick pulled now would be
+               tuned on the empty slot and then read as present. So here the
+               switch decides alone: one open window is a removal (hs.kim
+               2026-11-13 review B3: "1초는 스위치 단독으로", a stick that
+               cannot hold the switch for 1 s is out). Busy with no check
+               of ours started means the tuning job. */
+            if ((s_seq.tStep == APP_SEQ_STICK_INSERT) && (bActive != 0u)
+                && (s_seq.bChecking == 0u)
+                && (APP_EXEC_Measure_IsBusy() != 0u))
+            {
+                s_SequenceError(tErr);
+                return;
+            }
         }
         s_seq.bSwReads = 0u;
         s_seq.bSwLow   = 0u;
@@ -998,6 +1007,18 @@ Ret_t APP_CTRL_Sequence_Init(void)
 
 Ret_t APP_CTRL_Sequence_Process(void)
 {
+    /* A failed conversion (ADC timeout: ADC unpowered or broken) is an
+       optics fault in every step, BOOK with OPTIC_FAIL on its channel.
+       Before this, a failed reading was left as 0 and became a "sample
+       arrived" or C_LINE_FAIL (hs.kim review B1/B2, 2026-11-13). Checked
+       before the step can use the reading. Abort also clears the outcome. */
+    if (APP_EXEC_Measure_GetResult() == APP_EXEC_MEASURE_FAILED)
+    {
+        (void)APP_EXEC_Measure_Abort();
+        s_seq.bChecking = 0u;
+        s_EnterError(APP_EXEC_Measure_TuneError());
+    }
+
     s_RemoveCheck();
 
     switch (s_seq.tStep)

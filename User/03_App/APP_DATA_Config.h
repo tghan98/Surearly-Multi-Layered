@@ -73,7 +73,11 @@
    of five each per channel, about 1..3 s before the insert animation. */
 #define APP_OPTIC_FULL_LOOPS             3000u   /* 4.5 ms at 1.5 us a loop */
 #define APP_OPTIC_TUNE_SPAN               200u   /* each side of e, loops   */
-#define APP_OPTIC_TIME_MAX_LOOPS        10000u
+/* Upper limit of a charge time. Interrupts are masked for the whole delay,
+   so it stays under one 9.98 ms tick: 4500 loops is about 6.75 ms (hs.kim
+   review B6, 2026-11-13; was 10000 = 15 ms, a tick could be lost). Units
+   seen so far tune to 2546 at most. A time past it is held at it. */
+#define APP_OPTIC_TIME_MAX_LOOPS         4500u
 
 /* Line intensity thresholds -------------------------------------------------*/
 #define APP_T_LINE_THRESHOLD             1080u   /* old _nT_LINE_INT_THRESHOLD */
