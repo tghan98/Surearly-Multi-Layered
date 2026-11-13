@@ -811,6 +811,9 @@
       records.push({ slot, gain, emptyBand, resultBand, calc, errorStep: recErrStep, errorCode: recErrCode });
     }
 
+    // QC reference and Wake Fail are still in the 249-byte dump, but the
+    // firmware no longer writes them (QC mode removed 2026-11-13, Wake Fail
+    // unused since 2026-11-10). Parsed to keep the byte offsets, not shown.
     const qcReference = STICK_BANDS.map(band => ({
       band, value: isNewFormat ? readWord() : EMPTY_VALUE,
     }));
@@ -841,18 +844,6 @@
     return `적용 컷오프: 이 기기에 들어 있는 판정값은 T ${t}, C ${c} 입니다. 롯 대장의 값과 같은지 확인하십시오.`;
   }
 
-  function describeWakeFail(min, max) {
-    if (typeof min !== 'number' || typeof max !== 'number') {
-      return 'Wake Fail: SW1으로 깨어났으나 광학 관문(CH3 원본값 ≥ 2600)을 통과하지 못한 회차의 측정값 범위';
-    }
-    if (min === 0xFFFF && max === 0) return 'Wake Fail: 기록된 관문 실패값 없음';
-    if (min > max) return 'Wake Fail: ⚠ 깨진 기록 — 쓰기 중 전원이 끊긴 흔적일 수 있음. 믿지 말 것';
-    if (min === 0) return 'Wake Fail: 0 포함 — ADC timeout 또는 실제 입력 0 (구별 불가)';
-    if (max < 100) return 'Wake Fail: 광학 신호가 암전류 수준 — 광학계 확인 필요';
-    if (max - min < 200) return 'Wake Fail: 좁은 범위 — 스틱 없이 깨어남(노이즈)으로 보임';
-    return 'Wake Fail: 넓은 범위 — 스틱이 어중간하게 물렸을 가능성';
-  }
-
   function isOutOfRange(value, range) {
     return typeof value === 'number' && (value < range[0] || value > range[1]);
   }
@@ -873,23 +864,22 @@
   // 바뀌는 숫자를 여기에 박아두면 바뀌는 순간 틀린 안내가 된다. (2026-11-05)
   const GLOSSARY_ROWS = [
     ['T / BT / BC / C', '광학 채널 네 개. T는 검사선, C는 대조선, BT·BC는 각 선의 배경'],
-    ['ET / EBT / EBC / EC', 'Empty. 시료 투입 전 네 채널 값'],
-    ['RT / RBT / RBC / RC', 'Result. 검사가 끝난 뒤 네 채널 값'],
-    ['Gain CH1~4', '기기마다 다른 광량을 맞추기 위한 배율'],
+    ['초기 측정값 T / BT / BC / C', '스틱을 꽂자마자 LED를 켜 둔 채 잰 네 채널 값. 범위를 벗어나면 꽂자마자 책(광학 불량)'],
+    ['ET / EBT / EBC / EC', 'Empty. 시료 투입 전 마른 스틱의 네 채널 값(약 1200). 결과 계산의 기준'],
+    ['RT / RBT / RBC / RC', 'Result. 검사가 끝난 뒤 네 채널 값. 빠짐 에러(STICK REMOVE)면 물방울 단계에서 마지막으로 잰 값'],
+    ['Gain CH1~4', '충전 시간(LED를 켜고 재기까지의 지연 루프 횟수). 마른 스틱이 약 1200이 되도록 채널마다 맞춘 값. 0이면 그 전에 멈춘 회차'],
     ['T Intensity', '검사선이 얼마나 진하게 떴는지'],
     ['C Intensity', '대조선이 얼마나 진하게 떴는지'],
     ['Yes(1) / No(0)', '판정 결과. 1이 양성'],
     ['Insert Count', '스틱을 꽂은 횟수'],
     ['Test Complete Count', '검사를 끝까지 마친 횟수'],
     ['Error Step / Error Code', '몇 단계에서 어떤 이유로 멈췄는지'],
-    ['QC T / BT / BC / C', '출하 때 기록해둔 기준값'],
-    ['Wake Fail Min / Max', '깨어났지만 스틱 판정에 실패한 회차의 값 범위'],
     ['적용 컷오프 T / C', '이 기기에 들어 있는 판정값'],
   ];
 
   const GLOSSARY_HTML = `
       <details class="glossary">
-        <summary>8. 용어 설명</summary>
+        <summary>6. 용어 설명</summary>
         <table>
           <tbody>${GLOSSARY_ROWS.map(([k, v]) =>
             `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`).join('')}</tbody>
@@ -906,8 +896,6 @@
     const stickValueCells = d.initialStick.map(s => `
       <td class="${isOutOfRange(s.value, STICK_RAW_RANGE) ? 'value-warn' : ''}">${s.value}</td>
     `).join('');
-    const qcHeaderCells = d.qcReference.map(s => `<th>QC ${s.band}</th>`).join('');
-    const qcValueCells = d.qcReference.map(s => `<td>${s.value}</td>`).join('');
 
     const recordRows = d.records.map((r, i) => `
       <tr class="${i === latestSlot ? 'latest' : ''}">
@@ -991,34 +979,13 @@
       </section>
       <section>
           <div class="sec-head">
-            <div class="sec-title">5. 깨우기 실패 범위</div>
-            <div class="range-note">${describeWakeFail(d.wakeFailMin, d.wakeFailMax)}</div>
-          </div>
-          <div class="table-scroll">
-            <table>
-              <thead><tr><th>필드</th><th>Wake Fail Min</th><th>Wake Fail Max</th></tr></thead>
-              <tbody><tr><td>데이터(Value)</td><td>${d.wakeFailMin}</td><td>${d.wakeFailMax}</td></tr></tbody>
-            </table>
-          </div>
-      </section>
-      <section>
-          <div class="sec-head">
-            <div class="sec-title">6. 초기 측정값</div>
+            <div class="sec-title">5. 초기 측정값</div>
             <div class="range-note">Range: ${STICK_RAW_RANGE[0]} ≤ 측정값 ≤ ${STICK_RAW_RANGE[1]}</div>
           </div>
           <div class="table-scroll">
             <table>
               <thead><tr><th>필드</th>${stickHeaderCells}</tr></thead>
               <tbody><tr><td>데이터(Value)</td>${stickValueCells}</tr></tbody>
-            </table>
-          </div>
-      </section>
-      <section>
-          <div class="sec-title">7. QC 기준값</div>
-          <div class="table-scroll">
-            <table>
-              <thead><tr><th>필드</th>${qcHeaderCells}</tr></thead>
-              <tbody><tr><td>기준값(Value)</td>${qcValueCells}</tr></tbody>
             </table>
           </div>
       </section>
@@ -1049,12 +1016,6 @@
     rows.push([]);
     rows.push(['필드', ...d.initialStick.map(s => s.band)]);
     rows.push(['데이터(Value)', ...d.initialStick.map(s => s.value)]);
-    rows.push([]);
-    rows.push(['필드', ...d.qcReference.map(s => `QC ${s.band}`)]);
-    rows.push(['기준값(Value)', ...d.qcReference.map(s => s.value)]);
-    rows.push([]);
-    rows.push(['필드', 'Wake Fail Min', 'Wake Fail Max']);
-    rows.push(['데이터(Value)', d.wakeFailMin, d.wakeFailMax]);
     rows.push([]);
     rows.push(['필드', '적용 컷오프 T', '적용 컷오프 C']);
     rows.push(['기기값(Value)', d.cutoffT, d.cutoffC]);

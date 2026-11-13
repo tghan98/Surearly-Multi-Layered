@@ -7,6 +7,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "APP_DATA_Record.h"
+#include "APP_DATA_Config.h"    /* APP_TEST_MINLOG */
 #include "Eeprom.h"
 
 /* Private defines -----------------------------------------------------------*/
@@ -113,10 +114,12 @@ Ret_t APP_DATA_Record_Process(void)
         {
             s_rec.bDirty |= REC_DIRTY_RESULT;
         }
+#if (APP_TEST_MINLOG == 1)
         else if (wFailOffset < REC_OFF_DUMP_POS)
         {
             s_rec.bDirty |= REC_DIRTY_QC_REF;
         }
+#endif
         else
         {
             s_rec.bDirty |= REC_DIRTY_DUMP_POS;
@@ -168,6 +171,7 @@ Ret_t APP_DATA_Record_Process(void)
             s_rec.bDirty &= (uint8_t)~REC_DIRTY_DUMP_POS;
         }
     }
+#if (APP_TEST_MINLOG == 1)
     else if ((s_rec.bDirty & REC_DIRTY_QC_REF) != 0u)
     {
         tRet = Eeprom_Write(REC_OFF_QC_REF, (const uint8_t *)s_rec.awQcRef,
@@ -177,6 +181,7 @@ Ret_t APP_DATA_Record_Process(void)
             s_rec.bDirty &= (uint8_t)~REC_DIRTY_QC_REF;
         }
     }
+#endif
     else
     {
         /* nothing left */
@@ -228,6 +233,8 @@ Ret_t APP_DATA_Record_SetStickPtr(const uint16_t *p_wData)
     return RET_OK;
 }
 
+#if (APP_TEST_MINLOG == 1)
+/* Test build only: the minimum log rides in the QC words of the dump. */
 Ret_t APP_DATA_Record_SetQcRef(const uint16_t *p_wData)
 {
     uint8_t bIdx;
@@ -245,6 +252,7 @@ Ret_t APP_DATA_Record_SetQcRef(const uint16_t *p_wData)
 
     return RET_OK;
 }
+#endif
 
 Ret_t APP_DATA_Record_SaveResult(const uint16_t *p_wData)
 {

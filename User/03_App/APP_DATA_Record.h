@@ -104,8 +104,10 @@ Ret_t APP_DATA_Record_SetError(uint8_t bStep, uint8_t bCode);
 Ret_t APP_DATA_Record_SetStickPtr(const uint16_t *p_wData);
 
 /**
-  * @brief  Stores the four raw initial readings as the QC reference shown in
-  *         the dump. Written on a later pass.
+  * @brief  Test build only (APP_TEST_MINLOG 1): stores four words in the QC
+  *         reference slot of the dump. Written on a later pass. Production
+  *         builds keep no QC reference (hs.kim 2026-11-12); the slot is still
+  *         sent, frozen, for the 249-byte dump format.
   * @param  p_wData : APP_REC_QC_REF_WORDS words, must not be NULL
   * @note   Layer: App (data). Blocking: no. ISR: no.
   * @retval RET_OK, RET_ERR_NULL
