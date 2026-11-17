@@ -1,0 +1,19 @@
+﻿필드,Firmware Ver.,Real Firmware Ver.,LOT. Upper,LOT. Lower
+데이터(String),v2.1,v2.1.2T1,HLHM,26001
+
+필드,Insert Count,Test Complete Count
+데이터(Value),3,1
+
+필드,T,BT,BC,C
+데이터(Value),3255,3119,2585,3696
+
+필드,적용 컷오프 T,적용 컷오프 C
+기기값(Value),1130,1005
+
+필드,Gain CH1,Gain CH2,Gain CH3,Gain CH4,ET,EBT,EBC,EC,RT,RBT,RBC,RC,T Intensity,C Intensity,Yes(1)/No(0),Error Step,Error Code
+1,1422,1972,2000,1057,1194,1151,1178,1206,886,931,950,803,1088,1212,0,0,ERROR NONE
+2,450,553,541,399,0,0,0,0,0,0,0,0,0,0,0,1,ERROR STICK REMOVE
+3,1385,1823,1848,969,1197,1160,1182,1206,0,0,0,0,0,0,0,2,ERROR STICK REMOVE
+4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,ERROR NONE
+5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,ERROR NONE
+6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,ERROR NONE
