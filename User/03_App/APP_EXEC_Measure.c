@@ -60,7 +60,7 @@ static void s_TuneTry(uint16_t wTime)
        point is at least 3000 x 1200 / 3900 - 200 = 723, the second higher. */
     s_meas.bTries++;
     (void)Optic_SetTime((Optic_Ch)s_meas.bCh, wTime);
-    (void)Optic_StartOnce((Optic_Ch)s_meas.bCh);
+    (void)Optic_Start((Optic_Ch)s_meas.bCh);
 }
 
 /* First point of the current channel: e - span, e = full x 1200 / S.
@@ -266,7 +266,7 @@ Ret_t APP_EXEC_Measure_Process(void)
             }
             if (s_meas.bTries >= 3u)
             {
-                /* Dry reading in (five, at the tuned time): it is what
+                /* Dry reading in (at the tuned time): it is what
                    GetTunedSet hands on as the empty value. Kept here, as
                    the removal check may read C again before the sequence
                    asks (tuning runs behind the insert animation). */
@@ -326,8 +326,8 @@ Ret_t APP_EXEC_Measure_Process(void)
             }
             (void)Optic_SetTime((Optic_Ch)s_meas.bCh, (uint16_t)dwTime);
 
-            /* The dry (empty) reading at the time just set, five readings as
-               every measurement. Without it the empty value left in Optic
+            /* The dry (empty) reading at the time just set, the same reading
+               as every measurement. Without it the empty value left in Optic
                was the second tuning point, 100..300 below 1200
                (스틱책 7번, 2026-11-12 19:30 dump). */
             s_meas.bTries = 3u;

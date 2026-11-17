@@ -11,20 +11,25 @@
   * 22 nF value was confirmed from the BOM on 2026-10-30 - the schematic's
   * 1 nF is an error.)
   *
-  * Two kinds of measurement, chosen by the channel's charge time:
+  * Every measurement is one reading of six back-to-back conversions with
+  * the LED on: the first is discarded (it follows an idle gap, RM0031
+  * 14.3.4), the mean of the middle three of the other five is the result
+  * (hs.kim 2026-11-17: one way of measuring everywhere). The channel's charge
+  * time picks when the burst starts:
   *
   * Charge time 0 - steady reading, used once per insertion to check the
   *   sensor (acceptance window) and as the first guess for tuning:
-  *     LED on -> settle 20 ms -> 1 conversion -> LED off -> recover 20 ms
+  *     LED on -> settle 20 ms -> [mask IRQ] burst [unmask] -> LED off
+  *     -> recover 20 ms
   *   At this level a bright channel sits at the phototransistor's saturation
   *   ceiling, which is why it is not used for judging (2026-11-11).
   *
   * Charge time n - timed reading on the charging curve (hs.kim
-  *   Optic_Solution v1.2, 5-6), five times:
-  *     [mask IRQ] LED on -> n delay loops -> ADC start [unmask] -> fetch
-  *     -> LED off -> recover 20 ms (5 tau = 11 ms drains the node)
-  *   The result is the mean of the middle three: the sum less the highest
-  *   and the lowest (old FW: five scans, middle three).
+  *   Optic_Solution v1.2, 5-6):
+  *     [mask IRQ] LED on -> n delay loops -> burst [unmask] -> LED off
+  *     -> recover 20 ms (5 tau = 11 ms drains the node)
+  *   The kept conversions climb the curve about 8 counts each, at the same
+  *   moments in every reading, so the ratios stand.
   *   n is found by tuning so that a dry stick reads about 1200, well below
   *   the ceiling; every later reading of that channel uses the same n, so a
   *   band's ratio to the dry value stays proportional to the light.
@@ -35,8 +40,8 @@
   * thresholds.
   *
   * Differences from the common skeleton (spec v2.0.3 §15):
-  *   A timed reading blocks for its charge time, up to about 3.5 ms on a
-  *   dim channel, with interrupts masked. That exceeds the 2 ms slot budget;
+  *   A timed reading blocks for its charge time, up to 4500 loops (about
+  *   6.8 ms) plus the 85 us burst, with interrupts masked. That exceeds the 2 ms slot budget;
   *   it cannot be split, the charge time is the measurement.
   *
   * Context: main loop only. Call Optic_Process() from the 10 ms slot.
@@ -71,7 +76,7 @@ typedef enum
 /* Exported constants --------------------------------------------------------*/
 #define OPTIC_SETTLE_TK          HW_TICK_WAIT_MS(20u)
 #define OPTIC_RECOVER_TK         HW_TICK_WAIT_MS(20u)  /* >= 5 tau = 11 ms */
-#define OPTIC_READS              5u    /* timed readings, middle three kept */
+#define OPTIC_CONVS              6u    /* per reading: 1 discarded, middle 3 of 5 kept */
 #define OPTIC_GAIN_SCALE         100u  /* percent scale of the App ratios */
 
 /* Module-specific return codes ----------------------------------------------*/
@@ -95,18 +100,9 @@ Ret_t Optic_Init(void);
 Ret_t Optic_Start(Optic_Ch tCh);
 
 /**
-  * @brief  Starts a single timed reading instead of five (charge-time
-  *         tuning, where +/-100 is good enough and time matters).
-  * @param  tCh : channel to measure, its charge time already set (not 0)
-  * @note   Layer: Module. Blocking: no. ISR: no.
-  * @retval RET_OK, RET_ERR_PARAM, RET_BUSY
-  */
-Ret_t Optic_StartOnce(Optic_Ch tCh);
-
-/**
   * @brief  Advances the measurement. Call from the 10 ms slot.
   * @note   Layer: Module. Blocking: a timed reading takes its charge time,
-  *         up to about 3.5 ms, see the file header. ISR: no.
+  *         up to about 6.8 ms, see the file header. ISR: no.
   * @retval RET_OK
   */
 Ret_t Optic_Process(void);

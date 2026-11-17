@@ -7,7 +7,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "HW_ADC_Drive.h"
-#include "HW_Tick_Drive.h"
 #include "stm8l15x.h"
 #include "stm8l15x_adc.h"
 #include "stm8l15x_clk.h"
@@ -96,48 +95,40 @@ Ret_t HW_ADC_Select(HW_ADC_Id tId)
     return RET_OK;
 }
 
-void HW_ADC_Start(void)
+/* Conversions back to back, so only the first follows an idle gap: the
+   caller discards it (RM0031 14.3.4: a conversion more than tIDLE after the
+   previous one is to be discarded, keep the next; hs.kim 2026-11-17).
+   Interrupts are masked by the caller for the whole burst, so the tick is
+   frozen: the wait for EOC is bounded by a pass count instead. */
+Ret_t HW_ADC_Burst(HW_ADC_Id tId, uint16_t *p_awOut, uint8_t bCount)
 {
-    ADC1->CR1 |= ADC_CR1_START;
-}
+    uint8_t bIdx;
+    uint8_t bPoll;
+    Ret_t   tRet = RET_OK;
 
-Ret_t HW_ADC_Fetch(HW_ADC_Id tId, uint16_t *p_wOut)
-{
-    uint16_t wStart;
-    Ret_t    tRet = RET_TIMEOUT;
-
-    wStart = HW_Tick_Get();
-    while (HW_Tick_Elapsed(wStart) <= HW_ADC_CONV_TIMEOUT_TK)
+    for (bIdx = 0u; bIdx < bCount; bIdx++)
     {
-        if ((ADC1->SR & (uint8_t)ADC_FLAG_EOC) != 0u)
+        ADC1->CR1 |= ADC_CR1_START;
+        bPoll = HW_ADC_EOC_POLLS;
+        while (((ADC1->SR & (uint8_t)ADC_FLAG_EOC) == 0u) && (bPoll != 0u))
         {
-            /* Reading the result clears EOC. High byte first, as the
-               library did. */
-            *p_wOut = (uint16_t)((uint16_t)ADC1->DRH << 8);
-            *p_wOut |= ADC1->DRL;
-            tRet = RET_OK;
+            bPoll--;
+        }
+        if (bPoll == 0u)
+        {
+            tRet = RET_TIMEOUT;
             break;
         }
+        /* Reading the result clears EOC. High byte first, as the library
+           did. */
+        p_awOut[bIdx] = (uint16_t)((uint16_t)ADC1->DRH << 8);
+        p_awOut[bIdx] |= ADC1->DRL;
     }
 
     /* One analog input connected at a time, whatever the outcome. */
     ADC1->SQR[HW_ADC_SQR_IDX] &= (uint8_t)~s_map[tId];
 
     return tRet;
-}
-
-Ret_t HW_ADC_Read(HW_ADC_Id tId, uint16_t *p_wOut)
-{
-    Ret_t tRet;
-
-    tRet = HW_ADC_Select(tId);
-    if (tRet != RET_OK)
-    {
-        return tRet;
-    }
-    HW_ADC_Start();
-
-    return HW_ADC_Fetch(tId, p_wOut);
 }
 
 /*****************************END OF FILE****/

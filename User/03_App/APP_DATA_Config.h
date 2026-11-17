@@ -128,11 +128,17 @@
    The switch is read on every 10 ms pass and judged in windows of 25 reads
    (250 ms): 20 or more low is "in", and the optics are not fired at all.
    Fewer starts one optical check of C; a dark C is one strike, and the
-   check repeats at once. Two strikes in a row are a removal. A good window
+   check repeats APP_STICK_RECHECK_TK later. Two strikes in a row are a
+   removal. A good window
    or a bright C clears the strikes. */
 #define APP_STICK_SW_WINDOW                25u
 #define APP_STICK_SW_PASS                  20u
 #define APP_STICK_STRIKES                   2u
+/* Wait from a strike to the next check: with the ~30 ms check of the
+   six-conversion reading the strikes stay ~150 ms apart, as they were when
+   a check took five readings (2026-11-17, kept so that the ADC change is
+   the only change). */
+#define APP_STICK_RECHECK_TK         HW_TICK_MS(120u)
 
 /* Switch contact fault, for the production line (QC call 2026-11-11). Some
    units close the switch while the stick is pushed in and let go as soon as

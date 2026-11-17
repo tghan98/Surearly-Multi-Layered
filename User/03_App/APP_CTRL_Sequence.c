@@ -82,6 +82,7 @@ typedef struct
     uint8_t                bSwLow;       /* of those, reads that were low  */
     uint8_t                bSwOpenRun;   /* windows in a row judged open   */
     uint8_t                bStrikes;     /* open window + dark C, in a row */
+    uint16_t               wStrikeAt;    /* tick of the last strike        */
 } Seq_Ctx;
 
 /* Private variables ---------------------------------------------------------*/
@@ -606,12 +607,22 @@ static void s_RemoveCheck(void)
                 s_SequenceError(tErr);
                 return;
             }
-            bStart = 1u;            /* look again without waiting */
+            s_seq.wStrikeAt = HW_Tick_Get();   /* look again, see below */
         }
         else
         {
             s_seq.bStrikes = 0u;
         }
+    }
+
+    /* After a strike the next look comes APP_STICK_RECHECK_TK later, not at
+       once and not on the next open window. The two strikes then stay about
+       150 ms apart as before the six-conversion reading (2026-11-17), when
+       that gap was simply the length of a five-reading check. */
+    if (s_seq.bStrikes != 0u)
+    {
+        bStart = (HW_Tick_Elapsed(s_seq.wStrikeAt)
+                  >= (uint16_t)APP_STICK_RECHECK_TK) ? 1u : 0u;
     }
 
     if ((bStart != 0u) && (bActive != 0u)
