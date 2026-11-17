@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCU Pin Map</title>
+<style>
+:root { --bg:#f7f8fa; --panel:#fff; --border:#d8dce2; --header-bg:#1f2d3d; --header-fg:#fff; --section-bg:#e8edf5;
+  --note-bg:#fff8e1; --note-fg:#6b5900; --warn-bg:#fff1f0; --warn-fg:#8c1d18; --new-bg:#eafaf0;
+  --accent:#2f6fed; --row-alt:#f2f5f9; --text:#23292f; --muted:#6b7480; }
+* { box-sizing:border-box; }
+body { margin:0; padding:24px 16px; background:var(--bg); color:var(--text); font-family:"Segoe UI","Malgun Gothic",sans-serif; font-size:14px; line-height:1.5; }
+h1 { font-size:20px; margin:0 0 4px; }
+h2 { font-size:15px; margin:26px 0 10px; border-left:4px solid var(--accent); padding-left:8px; }
+h2 .count, h2 .desc { font-size:12px; color:var(--muted); font-weight:400; }
+.subtitle { color:var(--muted); font-size:13px; margin-bottom:18px; }
+.note { background:var(--note-bg); color:var(--note-fg); border-radius:6px; padding:8px 12px; font-size:13px; margin:6px 0; }
+.warnbox { background:var(--warn-bg); color:var(--warn-fg); border-radius:8px; padding:10px 14px; font-size:13px; margin:8px 0 16px; }
+.table-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow-x:auto; }
+table { border-collapse:collapse; width:100%; }
+thead th { background:var(--header-bg); color:var(--header-fg); text-align:left; padding:8px 12px; font-size:12.5px; }
+tbody td { padding:7px 12px; border-top:1px solid var(--border); vertical-align:top; font-size:13px; }
+tr.section td { background:var(--section-bg); font-weight:700; }
+tr.note td { background:var(--note-bg); color:var(--note-fg); font-size:12.5px; }
+tr.data.new td { background:var(--new-bg); }
+tr.data.warn td { background:var(--warn-bg); }
+td.net { font-family:Consolas,monospace; font-weight:600; }
+td.port { font-family:Consolas,monospace; color:var(--accent); font-weight:600; }
+td.pin { text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); }
+td.spare { color:var(--muted); font-style:italic; }
+.alias { font-size:11px; color:var(--warn-fg); font-weight:400; }
+.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap; }
+.badge.out{background:#ffe3d6;color:#a3400c} .badge.in{background:#d9f0e3;color:#14683c} .badge.analog{background:#e6dcfb;color:#4b2e99}
+.badge.spi{background:#d6ecff;color:#0a5aa3} .badge.i2c{background:#cdeeee;color:#0a6e6e} .badge.uart{background:#fde2ec;color:#a3134f}
+.badge.pwm{background:#fff3cd;color:#7a5c00} .badge.sys{background:#e3e6ea;color:#40474f} .badge.spare{background:#f0f0f0;color:#9aa0a6}
+.badge.warn{background:#ffe0e0;color:#b3261e}
+.summary-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:20px; }
+.scard { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 14px; }
+.scard .label { font-size:11.5px; color:var(--muted); } .scard .value { font-size:18px; font-weight:700; }
+.toolbar input[type=search] { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:16px; }
+footer { margin-top:24px; color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<h1>MCU_Pin_Map — STM8L151F3 (TSSOP20) 핀 매핑</h1>
+<div class="subtitle">
+  STM8L151F3 (회로도 U1 STM8L151F3_TSSOP20 / FW 툴체인 IAR EWSTM8 + STM8L15x StdPeriph, 설정 도구 없음)
+  · 기준: <code>HW/OrCad-Surearly_Multi-v1.1-r1574.DSN</code> (OrCAD 17.2 tclsh 추출) + <code>MFx_Layered/User/01_HW_Drive/HW_*_Drive.c</code>
+  · 비교 FW <code>MFx_v2.1.1_alpha.2/BSP/BSP_HW_Config.c/.h</code>
+  · 최종 갱신 2026-11-09 (회로도 10:35 수정본 반영)<br>
+  Net 정합 규칙: 회로도 넷 이름 기준, FW 라벨이 다르면 <code>cfg:</code> 병기는 기능 정의서(MCU_Signal_Map.html)에만 둔다.
+  예외(회로도 MCU측 넷 이름 없음): LCD_SEG_BOOK/NO/YES/DROP = FW 라벨(<code>HW_GPIO_</code> 제외) · TX, RX, SWIM = 테스트포인트/핀 기준 이름.
+  Pin 번호는 OrCAD 심볼 핀번호(데이터시트 패키지 표 대조는 확인 필요).
+</div>
+
+<div class="summary-cards">
+  <div class="scard"><div class="label">GPIO 사용 핀</div><div class="value">13</div></div>
+  <div class="scard"><div class="label">설정 파일 불일치</div><div class="value">0</div></div>
+  <div class="scard"><div class="label">SYS 고정</div><div class="value">4</div></div>
+  <div class="scard"><div class="label">서브시스템</div><div class="value">7</div></div>
+  <div class="scard"><div class="label">Spare</div><div class="value">3</div></div>
+</div>
+
+<div class="note">2026-11-09 회로 수정으로 회로도↔FW 핀 배치 불일치 0핀 (이전 3핀: PB2 → LCD_COM0 연결, PC4 → R10 → LCD_SEG3, PB0 미연결). 핀 배치 외 설정 차이(풀업·ADC 샘플링·미사용 핀 처리)는 MCU_Signal_Map.html warnbox 참고.</div>
+
+<div class="toolbar"><input type="search" id="filterBox" placeholder="넷 이름 / 포트 / 핀 번호 검색…" oninput="filterRows()"><span id="matchCount"></span></div>
+
+<h2>Stick Switch 입력 <span class="count">1핀</span> <span class="desc">SW1 SPVM11000 ×1, R4 100kΩ 풀업</span></h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Net Name</th><th>Port</th><th class="pin">Pin</th><th>Alt. Function</th></tr></thead>
+<tbody>
+<tr><td class="net">SW_STRIP</td><td class="port">PB1</td><td class="pin">11</td><td><span class="badge in">GPIO_Input</span> (GPIO_Mode_In_PU_No_IT, Halt 시 GPIO_Mode_In_PU_IT + EXTI1 Falling)</td></tr>
+</tbody></table></div>
+
+<h2>Optic LED 구동 <span class="count">2핀</span> <span class="desc">LED1 FC-1608UGK-520D26 ×2, R13 510Ω/F 공통 애노드</span></h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Net Name</th><th>Port</th><th class="pin">Pin</th><th>Alt. Function</th></tr></thead>
+<tbody>
+<tr><td class="net">nLED1</td><td class="port">PB4</td><td class="pin">14</td><td><span class="badge out">GPIO_Output</span> (GPIO_Mode_Out_PP_Low_Slow, 초기값 Low = LED ON → Optic_Init에서 High)</td></tr>
+<tr><td class="net">nLED2</td><td class="port">PB3</td><td class="pin">13</td><td><span class="badge out">GPIO_Output</span> (GPIO_Mode_Out_PP_Low_Slow, 초기값 Low = LED ON → Optic_Init에서 High)</td></tr>
+</tbody></table></div>
+
+<h2>Photo Sensor <span class="count">3핀</span> <span class="desc">Q1~Q3 PT11-21C-L41-TR8 ×3, 100kΩ/F 풀다운 + 22nF</span></h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Net Name</th><th>Port</th><th class="pin">Pin</th><th>Alt. Function</th></tr></thead>
+<tbody>
+<tr><td class="net">PTR1</td><td class="port">PB5</td><td class="pin">15</td><td><span class="badge analog">ADC_Channel_13</span> (12bit, 384 cycles, GPIO 리셋 기본 입력)</td></tr>
+<tr><td class="net">PTR2</td><td class="port">PB6</td><td class="pin">16</td><td><span class="badge analog">ADC_Channel_12</span> (12bit, 384 cycles, GPIO 리셋 기본 입력)</td></tr>
+<tr><td class="net">PTR3</td><td class="port">PB7</td><td class="pin">17</td><td><span class="badge analog">ADC_Channel_11</span> (12bit, 384 cycles, GPIO 리셋 기본 입력)</td></tr>
+</tbody></table></div>
+
+<h2>QC UART <span class="count">2핀</span> <span class="desc">USART1 PA2/PA3 Remap, TP TX/RX, 9600 8N1</span></h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Net Name</th><th>Port</th><th class="pin">Pin</th><th>Alt. Function</th></tr></thead>
+<tbody>
+<tr><td class="net">TX</td><td class="port">PA2</td><td class="pin">5</td><td><span class="badge uart">USART1_TX</span> (SYSCFG RMPCR1[5:4]=01 Remap)</td></tr>
+<tr><td class="net">RX</td><td class="port">PA3</td><td class="pin">6</td><td><span class="badge uart">USART1_RX</span> (SYSCFG RMPCR1[5:4]=01 Remap, RXNE 인터럽트)</td></tr>
+</tbody></table></div>
+
+<h2>LCD 표시 <span class="count">5핀</span> <span class="desc">LCD1 LCD_INI_12120, COM 1 + SEG 4, 직렬 1kΩ ×4</span></h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Net Name</th><th>Port</th><th class="pin">Pin</th><th>Alt. Function</th></tr></thead>
+<tbody>
+<tr><td class="net">LCD_COM0</td><td class="port">PB2</td><td class="pin">12</td><td><span class="badge out">GPIO_Output</span> (GPIO_Mode_Out_PP_Low_Slow, 10 ms 위상 반전)</td></tr>
+<tr><td class="net">LCD_SEG_BOOK</td><td class="port">PC5</td><td class="pin">1</td><td><span class="badge out">GPIO_Output</span> (GPIO_Mode_Out_PP_Low_Slow, R7 1kΩ → LCD_SEG0)</td></tr>
+<tr><td class="net">LCD_SEG_NO</td><td class="port">PC6</td><td class="pin">2</td><td><span class="badge out">GPIO_Output</span> (GPIO_Mode_Out_PP_Low_Slow, R8 1kΩ → LCD_SEG1)</td></tr>
+<tr><td class="net">LCD_SEG_YES</td><td class="port">PD0</td><td class="pin">9</td><td><span class="badge out">GPIO_Output</span> (GPIO_Mode_Out_PP_Low_Slow, R9 1kΩ → LCD_SEG2)</td></tr>
+<tr><td class="net">LCD_SEG_DROP</td><td class="port">PC4</td><td class="pin">20</td><td><span class="badge out">GPIO_Output</span> (GPIO_Mode_Out_PP_Low_Slow, R10 1kΩ → LCD_SEG3)</td></tr>
+</tbody></table></div>
+<div class="note">참고: 2026-11-09 회로 수정 — LCD1 1번(COM) GND 직결 → PB2(LCD_COM0), SEG3 구동핀 PB0 → PC4, TP TM 삭제.</div>
+
+<h2>확장 예비 IO <span class="count">3핀</span> <span class="desc">미사용 3핀</span></h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Net Name</th><th>Port</th><th class="pin">Pin</th><th>Alt. Function</th></tr></thead>
+<tbody>
+<tr><td class="net">—</td><td class="port">PB0</td><td class="pin">10</td><td class="spare"><span class="badge spare">Spare</span> (회로도 미연결, FW 미설정)</td></tr>
+<tr><td class="net">—</td><td class="port">PC0</td><td class="pin">18</td><td class="spare"><span class="badge spare">Spare</span> (회로도 미연결, FW 미설정)</td></tr>
+<tr><td class="net">—</td><td class="port">PC1</td><td class="pin">19</td><td class="spare"><span class="badge spare">Spare</span> (회로도 미연결, FW 미설정)</td></tr>
+</tbody></table></div>
+<div class="note">참고: MFx_Layered 주석은 "미사용 핀은 init에서 Low 출력"이라 하지만 코드에는 해당 처리가 없다(확인 필요). v2.1.1은 PC0·PC1을 초기화 시, PB0를 슬립 전에 Low 출력.</div>
+
+<h2>MCU 기본 / SYS <span class="count">4핀</span> <span class="desc">U1 STM8L151F3 TSSOP20, HSI/8 = 2 MHz — GPIO 예산 미포함</span></h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Net Name</th><th>Port</th><th class="pin">Pin</th><th>Alt. Function</th></tr></thead>
+<tbody>
+<tr><td class="net">SWIM</td><td class="port">PA0</td><td class="pin">3</td><td><span class="badge sys">SWIM</span> (디버그 전용, TP SM, FW 재설정 없음)</td></tr>
+<tr><td class="net">RST</td><td class="port">NRST/PA1</td><td class="pin">4</td><td><span class="badge sys">NRST</span> (R5 100kΩ 풀업, C4 100nF, TP RST)</td></tr>
+<tr><td class="net">VCC</td><td class="port">VDD/VDDA/VREF+</td><td class="pin">8</td><td><span class="badge sys">Power</span> (U2 TPS7A0325 출력, C6 1µF)</td></tr>
+<tr><td class="net">GND</td><td class="port">VSS/VSSA/VREF−</td><td class="pin">7</td><td><span class="badge sys">Power</span></td></tr>
+</tbody></table></div>
+<div class="note">참고: 외부 크리스털 없음 — HSE(PA2/PA3)·LSE(PC5/PC6) 핀은 UART·LCD GPIO로 사용 중. 부트 핀 없음.</div>
+
+<footer>원본: HW/MCU_Pin_Map.html · 최종 갱신: 2026-11-09 (회로도 10:35 수정본 반영 — LCD 불일치 3핀 해소, v2.1.1 FW 대조 추가) · 이전 2026-11-09 (최초 작성 — DSN r1574 + MFx_Layered FW 대조) · 짝 문서: HW/MCU_Signal_Map.html</footer>
+<script>
+function filterRows() {
+  const q = document.getElementById('filterBox').value.trim().toLowerCase();
+  let visible = 0;
+  document.querySelectorAll('tbody tr').forEach(r => {
+    const m = !q || r.textContent.toLowerCase().includes(q);
+    r.hidden = !m; if (m) visible++;
+  });
+  document.querySelectorAll('h2').forEach(h => {
+    const w = h.nextElementSibling;
+    if (!w || !w.classList.contains('table-wrap')) return;
+    const any = [...w.querySelectorAll('tbody tr')].some(r => !r.hidden);
+    h.hidden = !any; w.hidden = !any;
+  });
+  document.getElementById('matchCount').textContent = q ? `${visible}건 일치` : '';
+}
+</script>
+</body>
+</html>
