@@ -120,37 +120,25 @@
 #define APP_REACTION_WAIT_TK     ((uint16_t)(APP_BLINK_TO_RESULT_TK \
                                              - APP_LOW_SAMPLE_CHECK_TK))
 
-/* Stick removal: the switch AND the optics (hs.kim, 2026-11-11).
-   Either one alone raises false removals. The optics: as the colour
-   develops the whole strip turns red and darkens, much as a pulled stick
-   does. The switch: its contact lets go now and then with the stick in.
-   So the stick counts as removed only when both say so.
-   The switch is read on every 10 ms pass and judged in windows of 25 reads
-   (250 ms): 20 or more low is "in", and the optics are not fired at all.
-   Fewer starts one optical check of C; a dark C is one strike, and the
-   check repeats APP_STICK_RECHECK_TK later. Two strikes in a row are a
-   removal. A good window
-   or a bright C clears the strikes. */
-#define APP_STICK_SW_WINDOW                25u
-#define APP_STICK_SW_PASS                  20u
+/* Stick removal: by the sequence step, on C alone (meeting 2026-11-19,
+   decided 2026-11-20). The switch only wakes the unit and is not read
+   after that: some units let its contact go as soon as the hand does
+   (3 of 12 at QC, 2026-11-19). C tells a pulled stick only while it is
+   still dry and white, before the sample reaches it; once it wets and
+   turns red it darkens much as a pulled stick does. So C is read only in
+   STICK_INSERT (after the tuning) and SAMPLE_LOAD_WAIT, its arrival hold
+   included, every APP_STICK_CHECK_TK. A dark C is one strike and is looked
+   at again APP_STICK_RECHECK_TK later; two strikes in a row are a removal,
+   a bright C clears them. Later steps are not checked: a stick pulled after
+   the sample arrived is left to the end-of-run check (to come, after the
+   Osong data). */
+#define APP_STICK_CHECK_TK           HW_TICK_MS(250u)
 #define APP_STICK_STRIKES                   2u
 /* Wait from a strike to the next check: with the ~30 ms check of the
    six-conversion reading the strikes stay ~150 ms apart, as they were when
    a check took five readings (2026-11-17, kept so that the ADC change is
    the only change). */
 #define APP_STICK_RECHECK_TK         HW_TICK_MS(120u)
-
-/* Switch contact fault, for the production line (QC call 2026-11-11). Some
-   units close the switch while the stick is pushed in and let go as soon as
-   the hand does. A contact that opens now and then is tolerated above; one
-   that stays open is to be sorted out, and the operator tells the two
-   faults apart on the panel:
-     BOOK at once on insertion          -> optics (acceptance window, tuning)
-     BOOK after the insert animation    -> switch contact
-   "Stays open" is this many windows in a row, open at the moment the
-   animation ends: 4 x 250 ms = 1 s. Stored as STICK_FAIL in step 1, which
-   no other path produces, so a dump tells it apart without a new code. */
-#define APP_SW_FAULT_WINDOWS                4u
 
 /* "Sample arrived" is a drop in T against BT, and a stick being pulled out
    darkens both, which passes for the same drop (bench dumps 2026-11-06,
@@ -164,14 +152,14 @@
 /* Test build: worst-case log (2026-11-11, hs.kim). 1 builds a test FW that
    does NOT end a run on stick removal. Instead, from the end of gain tuning
    to the result scan, it reads one channel every 250 ms in turn and keeps
-   the lowest gain-applied value of each, and it reads the stick switch on
-   every 10 ms pass and keeps its longest open stretch. They are stored
-   when the run ends and read with the ordinary dump, in the QC reference
-   field, which means something else in the product:
-     QC T                 : longest switch-open stretch, 10 ms units
-     QC BT / QC BC / QC C : lowest BT / BC / C (gain applied) during the run
-   Purpose: see how dark each channel gets while the colour develops, and
-   whether the switch drops out with the stick in. Keep 0 for production. */
+   the lowest gain-applied value of each. They are stored when the run
+   ends and read with the ordinary dump, in the QC reference field, which
+   means something else in the product:
+     QC T / QC BT / QC BC / QC C : lowest value (gain applied) during the run
+   (QC T held the longest switch-open stretch until 2026-11-20.)
+   Purpose: set the lowest values against the result band of the same
+   record, for a normal stick and for one pulled during the reaction, to
+   find the end-of-run removal check. Keep 0 for production. */
 #ifndef APP_TEST_MINLOG
 #define APP_TEST_MINLOG                     0
 #endif

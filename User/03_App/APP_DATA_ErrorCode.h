@@ -22,7 +22,7 @@ typedef enum
 {
     APP_ERR_NONE             = 0x00,  /* no error                              */
     APP_ERR_STICK_REMOVE     = 0x01,  /* removed before the C band changed     */
-    APP_ERR_STICK_FAIL       = 0x02,  /* removed after the C band changed      */
+    APP_ERR_STICK_FAIL       = 0x02,  /* removed after arrival (end-of-run check, to come; unused since 2026-11-20) */
     APP_ERR_OVER_FLOW        = 0x03,  /* too much sample                       */
     APP_ERR_LOW_SAMPLE       = 0x04,  /* too little sample                     */
     APP_ERR_OVER_USED        = 0x05,  /* more than APP_SCAN_MAX_COUNT runs     */
