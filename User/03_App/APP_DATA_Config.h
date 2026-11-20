@@ -130,8 +130,7 @@
    included, every APP_STICK_CHECK_TK. A dark C is one strike and is looked
    at again APP_STICK_RECHECK_TK later; two strikes in a row are a removal,
    a bright C clears them. Later steps are not checked: a stick pulled after
-   the sample arrived is left to the end-of-run check (to come, after the
-   Osong data). */
+   the sample arrived is left to the end-of-run check (APP_STICK_RISE_MIN). */
 #define APP_STICK_CHECK_TK           HW_TICK_MS(250u)
 #define APP_STICK_STRIKES                   2u
 /* Wait from a strike to the next check: with the ~30 ms check of the
@@ -149,21 +148,32 @@
    and DROP starts blinking when it did before. */
 #define APP_ARRIVAL_HOLD_TK          HW_TICK_MS(1000u)
 
-/* Test build: worst-case log (2026-11-11, hs.kim). 1 builds a test FW that
-   does NOT end a run on stick removal. Instead, from the end of gain tuning
-   to the result scan, it reads one channel every 250 ms in turn and keeps
-   the lowest gain-applied value of each. They are stored when the run
-   ends and read with the ordinary dump, in the QC reference field, which
-   means something else in the product:
-     QC T / QC BT / QC BC / QC C : lowest value (gain applied) during the run
-   (QC T held the longest switch-open stretch until 2026-11-20.)
-   Purpose: set the lowest values against the result band of the same
-   record, for a normal stick and for one pulled during the reaction, to
-   find the end-of-run removal check. Keep 0 for production. */
+/* End-of-run removal (step 2, meeting 2026-11-19, decided 2026-11-20).
+   During the reaction BT and BC are read in turn every APP_REACT_LOG_TK
+   (each about every 250 ms); per channel the lowest 1 s window value is
+   kept (four readings, highest and lowest dropped, middle two averaged).
+   At the result scan, if BT and BC have BOTH come back less than
+   APP_STICK_RISE_MIN above it, the stick is taken as gone: STICK_FAIL
+   (BOOK) instead of a result. Osong data 2026-11-20 (HCGM build on LH
+   readers): pulled at 2:30 rose at most 12 (window), normal runs at least
+   286 (window, v2.2X3) and 137 (single readings, v2.2X2). 100 leaves the
+   wider margin on the normal side: a good run shown as BOOK is the worse
+   mistake, a stick pulled mid-test is rare. Single readings are not used:
+   pulling a stick can leave one dark reading (80..237 of false rise). */
+#define APP_STICK_RISE_MIN                100u
+#define APP_REACT_LOG_TK             HW_TICK_MS(120u)   /* BT, BC in turn */
+
+/* Test build (2026-11-11, v2.2X3 on 2026-11-20). 1 builds a test FW that
+   does NOT end a run on stick removal (neither check runs). It logs the
+   reaction as above and also keeps the lowest single reading; both are
+   stored when the run ends and read with the ordinary dump, in the QC
+   reference field, which means something else in the product:
+     QC T  : BT lowest reading      QC BT : BC lowest reading
+     QC BC : BT lowest window       QC C  : BC lowest window
+   Keep 0 for production. */
 #ifndef APP_TEST_MINLOG
 #define APP_TEST_MINLOG                     0
 #endif
-#define APP_TEST_MINLOG_TK           HW_TICK_MS(250u)
 
 /* Pace of the waiting loops: one legacy "sleep" of 250 ms. The sample-load
    wait takes one T/BT pair every four of them, as the old FW did. */

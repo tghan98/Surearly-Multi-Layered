@@ -54,6 +54,27 @@ typedef enum
     SEQ_RES_COUNT
 } Seq_Result;
 
+/* bChecking: which optical check of s_RemoveCheck() is under way. */
+#define SEQ_CHECK_STICK      1u   /* C, is the stick in? (before arrival) */
+#define SEQ_CHECK_REACT      2u   /* BT or BC, reaction log               */
+
+#define SEQ_REACT_CH         2u   /* reaction log: BT and BC              */
+#define SEQ_REACT_WIN        4u   /* readings per window, ~1 s            */
+
+/* One logged channel of the reaction (BT or BC), for the end-of-run
+   removal check (step 2, decided 2026-11-20). */
+typedef struct
+{
+#if (APP_TEST_MINLOG == 1)
+    uint16_t wMin;       /* lowest single reading (test build)  */
+#endif
+    uint16_t wWinMin;    /* lowest window value                 */
+    uint16_t wSum;       /* this window: sum of readings        */
+    uint16_t wLo;        /*   lowest reading                    */
+    uint16_t wHi;        /*   highest reading                   */
+    uint8_t  bN;         /*   readings in it                    */
+} Seq_ReactCh;
+
 typedef struct
 {
     APP_CTRL_Sequence_Step tStep;
@@ -72,10 +93,7 @@ typedef struct
     uint8_t                bChecking;
     uint8_t                bChannel;
     uint8_t                bSleeps;
-#if (APP_TEST_MINLOG == 1)
-    uint16_t               awTestMin[OPTIC_CH_COUNT]; /* lowest, gain applied */
-    uint8_t                bTestCh;      /* channel the next read takes    */
-#endif
+    uint8_t                bReactCh;     /* 0 = BT, 1 = BC: the next read  */
     uint8_t                bSwReads;     /* wake check: switch reads       */
     uint8_t                bSwLow;       /* of those, reads that were low  */
     uint8_t                bStrikes;     /* dark C readings in a row       */
@@ -88,6 +106,7 @@ typedef struct
    the bulk buffers are moved out so the frequently touched state can
    stay in the short-addressed page. See EWSTM8/MFx_Layered.icf. */
 __near static Seq_Ctx s_seq;
+__near static Seq_ReactCh s_atReact[SEQ_REACT_CH];
 
 /* LCD animation tables -------------------------------------------------------
    What the panel shows is an App decision; Lcd only plays the table
@@ -207,13 +226,19 @@ static void s_ClearRun(void)
     /* The first stick check goes as soon as the tuning lets it: the tuning
        alone (~0.85 s) outlasts APP_STICK_CHECK_TK. */
     s_seq.wStickStart = HW_Tick_Get();
-#if (APP_TEST_MINLOG == 1)
-    for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
+    for (bCh = 0u; bCh < (uint8_t)SEQ_REACT_CH; bCh++)
     {
-        s_seq.awTestMin[bCh] = 0xFFFFu;
-    }
-    s_seq.bTestCh     = 0u;
+#if (APP_TEST_MINLOG == 1)
+        s_atReact[bCh].wMin    = 0xFFFFu;
 #endif
+        s_atReact[bCh].wWinMin = 0xFFFFu;
+        s_atReact[bCh].wSum    = 0u;
+        s_atReact[bCh].wLo     = 0xFFFFu;
+        s_atReact[bCh].wHi     = 0u;
+        s_atReact[bCh].bN      = 0u;
+    }
+    /* bReactCh is not reset: which of BT and BC is read first does not
+       matter, each keeps its own window (2026-11-20, flash). */
 
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
@@ -466,16 +491,26 @@ static uint8_t s_Sleep(void)
    animation phase, never while the step measures a channel itself (review
    D7), so the two never compete for the optics. The result is taken on the
    first pass after the check finishes, before the step can start anything
-   new; a result that arrives after the step has moved on is dropped. */
+   new; a result that arrives after the step has moved on is dropped.
+
+   The reaction (after the sample arrived) is not judged here. There BT and
+   BC are read in turn every APP_REACT_LOG_TK, each about every 250 ms, and
+   per channel the lowest 1 s window value is kept: four readings, highest
+   and lowest dropped, the middle two averaged. The window drops the dark
+   reading that pulling a stick can leave (Osong 2026-11-20: single readings
+   rose 80..237 on pulled sticks, windows at most 12). The result scan sets
+   the end values against these (s_StepResultScan). Both builds log; the
+   test build (APP_TEST_MINLOG) also keeps the lowest single reading and
+   stores both in the QC field instead of judging. */
 static void s_RemoveCheck(void)
 {
-    uint8_t bActive;
-#if (APP_TEST_MINLOG == 1)
-    uint8_t  bLog;
-    uint16_t wTest;
-#else
-    uint8_t  bStart;
-#endif
+    uint8_t      bReact;
+    uint8_t      bIdx;
+    uint16_t     wRead;
+    Seq_ReactCh *p_tCh;
+#if (APP_TEST_MINLOG == 0)
+    uint8_t      bActive;
+    uint8_t      bStart;
 
     switch (s_seq.tStep)
     {
@@ -492,51 +527,72 @@ static void s_RemoveCheck(void)
             bActive = 0u;
             break;
     }
+#endif
 
-#if (APP_TEST_MINLOG == 1)
-    /* Test build: log, never end the run. From the end of the tuning to the
-       result scan one channel is read every APP_TEST_MINLOG_TK in turn and
-       its lowest value kept; the reaction steps are logged too, in their
-       WAIT phase, which is the span the end-of-run check will judge. */
-    bLog = bActive;
-    if (((s_seq.tStep == APP_SEQ_OVER_SAMPLE_CHECK)
-         || (s_seq.tStep == APP_SEQ_LOW_SAMPLE_CHECK)
-         || (s_seq.tStep == APP_SEQ_REACTION_WAIT))
+    /* OVER_SAMPLE_CHECK, LOW_SAMPLE_CHECK and REACTION_WAIT are numbered
+       one after another (APP_CTRL_Sequence.h), so one unsigned range test
+       covers the three (2026-11-20, flash). */
+    bReact = 0u;
+    if (((uint8_t)((uint8_t)s_seq.tStep - (uint8_t)APP_SEQ_OVER_SAMPLE_CHECK)
+         <= (uint8_t)((uint8_t)APP_SEQ_REACTION_WAIT
+                      - (uint8_t)APP_SEQ_OVER_SAMPLE_CHECK))
         && (s_seq.tPhase == SEQ_PH_WAIT))
     {
-        bLog = 1u;
+        bReact = 1u;
     }
 
-    if (s_seq.bChecking != 0u)
+    /* A reaction reading that was started: into the channel's window. */
+    if (s_seq.bChecking == SEQ_CHECK_REACT)
     {
         if (APP_EXEC_Measure_IsBusy() != 0u)
         {
             return;
         }
         s_seq.bChecking = 0u;
-        wTest = Optic_GetRaw((Optic_Ch)s_seq.bTestCh);
-        if (wTest < s_seq.awTestMin[s_seq.bTestCh])
+        bIdx  = s_seq.bReactCh;
+        p_tCh = &s_atReact[bIdx];
+        wRead = Optic_GetRaw((Optic_Ch)(bIdx + (uint8_t)OPTIC_CH_BT));
+        /* Window of four, kept as sum, lowest and highest: the window value
+           is the sum less both, halved (middle two averaged). Readings are
+           below 4096, so four fit in 16 bits. */
+        p_tCh->wSum += wRead;
+        if (wRead < p_tCh->wLo)
         {
-            s_seq.awTestMin[s_seq.bTestCh] = wTest;
+            p_tCh->wLo = wRead;
         }
-        s_seq.bTestCh = (uint8_t)((s_seq.bTestCh + 1u)
-                                  & (uint8_t)(OPTIC_CH_COUNT - 1u));
+        if (wRead > p_tCh->wHi)
+        {
+            p_tCh->wHi = wRead;
+        }
+        p_tCh->bN++;
+        if (p_tCh->bN >= (uint8_t)SEQ_REACT_WIN)
+        {
+            wRead = (uint16_t)((uint16_t)(p_tCh->wSum - p_tCh->wLo
+                                          - p_tCh->wHi) >> 1u);
+            if (wRead < p_tCh->wWinMin)
+            {
+                p_tCh->wWinMin = wRead;
+            }
+#if (APP_TEST_MINLOG == 1)
+            /* The lowest single reading is the lowest window low. */
+            if (p_tCh->wLo < p_tCh->wMin)
+            {
+                p_tCh->wMin = p_tCh->wLo;
+            }
+#endif
+            p_tCh->bN   = 0u;           /* next window */
+            p_tCh->wSum = 0u;
+            p_tCh->wLo  = 0xFFFFu;
+            p_tCh->wHi  = 0u;
+        }
+        s_seq.bReactCh = (uint8_t)(bIdx ^ 1u);
         return;
     }
 
-    if ((bLog == 0u)
-        || (HW_Tick_Elapsed(s_seq.wStickStart) < APP_TEST_MINLOG_TK))
-    {
-        return;
-    }
-    if (APP_EXEC_Measure_StartSingle((Optic_Ch)s_seq.bTestCh) == RET_OK)
-    {
-        s_seq.wStickStart = HW_Tick_Get();
-        s_seq.bChecking   = 1u;
-    }
-#else
-    /* The check that was started: a dark C is a strike, two in a row are a
-       removal. Taken only while the step still checks; otherwise dropped. */
+#if (APP_TEST_MINLOG == 0)
+    /* The stick check that was started: a dark C is a strike, two in a row
+       are a removal. Taken only while the step still checks; otherwise
+       dropped. */
     if (s_seq.bChecking != 0u)
     {
         if (APP_EXEC_Measure_IsBusy() != 0u)
@@ -559,7 +615,23 @@ static void s_RemoveCheck(void)
             s_seq.bStrikes = 0u;
         }
     }
+#endif
 
+    if (bReact != 0u)
+    {
+        if ((HW_Tick_Elapsed(s_seq.wStickStart)
+             >= (uint16_t)APP_REACT_LOG_TK)
+            && (APP_EXEC_Measure_StartSingle(
+                    (Optic_Ch)(s_seq.bReactCh + (uint8_t)OPTIC_CH_BT))
+                == RET_OK))
+        {
+            s_seq.wStickStart = HW_Tick_Get();
+            s_seq.bChecking   = SEQ_CHECK_REACT;
+        }
+        return;
+    }
+
+#if (APP_TEST_MINLOG == 0)
     if (bActive == 0u)
     {
         return;
@@ -582,7 +654,7 @@ static void s_RemoveCheck(void)
     if ((bStart != 0u) && (APP_EXEC_Measure_StartStickCheck() == RET_OK))
     {
         s_seq.wStickStart = HW_Tick_Get();
-        s_seq.bChecking   = 1u;
+        s_seq.bChecking   = SEQ_CHECK_STICK;
     }
 #endif
 }
@@ -592,6 +664,9 @@ static Ret_t s_SaveResult(void)
     uint16_t awRecord[APP_REC_SLOT_WORDS];
     uint8_t bCh;
     uint8_t bIndex = 0u;
+#if (APP_TEST_MINLOG == 1)
+    uint16_t awQc[OPTIC_CH_COUNT];
+#endif
 
     for (bCh = 0u; bCh < (uint8_t)OPTIC_CH_COUNT; bCh++)
     {
@@ -609,20 +684,27 @@ static Ret_t s_SaveResult(void)
     {
         awRecord[bIndex++] = s_seq.awResult[bCh];
     }
-#if (APP_TEST_MINLOG == 1)
-    /* The four lowest values, T included: the switch is no longer read
-       after the wake (2026-11-20), so T's slot no longer carries the
-       switch-open figure. Set against the result band of the same record,
-       they show whether the strip came back up after its darkest point,
-       the basis of the end-of-run removal check to come. */
-    /* A run that never reached the logging window (an early error, or the
-       used stick put back in to wake the unit for the dump) must not wipe
-       the figures of the run before it (2026-11-11, 물책 1번). */
-    if (s_seq.awTestMin[OPTIC_CH_C] != 0xFFFFu)
+    /* QC field = the reaction log, for reading a BOOK in the field
+       (2026-11-20): QC T = BT lowest reading, QC BT = BC lowest reading
+       (test build only, 0 in the product), QC BC = BT lowest window,
+       QC C = BC lowest window. With RBT and RBC of the same record they
+       give the rise the end-of-run check judged.
+       A run that never reached the reaction (an early error, or the used
+       stick put back in to wake the unit for the dump) must not wipe the
+       figures of the run before it (2026-11-11, 물책 1번). */
+    if (s_atReact[0].wWinMin != 0xFFFFu)
     {
-        (void)APP_DATA_Record_SetQcRef(s_seq.awTestMin);
-    }
+#if (APP_TEST_MINLOG == 1)
+        awQc[0] = s_atReact[0].wMin;
+        awQc[1] = s_atReact[1].wMin;
+        awQc[2] = s_atReact[0].wWinMin;
+        awQc[3] = s_atReact[1].wWinMin;
+        (void)APP_DATA_Record_SetQcRef(awQc);
+#else
+        APP_DATA_Record_SetReactLog(s_atReact[0].wWinMin,
+                                    s_atReact[1].wWinMin);
 #endif
+    }
     /* The record format stores the step in the high byte. */
     awRecord[bIndex] = (uint16_t)(((uint16_t)s_seq.bErrorStep << 8u)
                                 | (uint8_t)s_seq.tError);
@@ -896,6 +978,33 @@ static void s_StepResultScan(void)
                                             s_seq.awEmptyBand[OPTIC_CH_BC]);
             s_seq.awResult[SEQ_RES_T] = APP_EXEC_Measure_Intensity(wBT, wT);
             s_seq.awResult[SEQ_RES_C] = APP_EXEC_Measure_Intensity(wBC, wC);
+#if (APP_TEST_MINLOG == 0)
+            /* End-of-run removal (step 2, meeting 2026-11-19, decided
+               2026-11-20). A stick in place darkens as the strip wets and
+               comes back up as it clears; a pulled stick leaves the empty
+               slot, which stays down. If neither BT nor BC is back
+               APP_STICK_RISE_MIN above its lowest reaction window, the stick
+               is gone: BOOK instead of a result (an empty slot otherwise
+               shows YES or NO). Judged only when both channels have a
+               window; no log, no judgment. Checked before the C line and
+               YES/NO so neither can show for an empty slot. */
+            /* Only BT's log is tested for presence: BT and BC are read in
+               turn, so BC lacks a window only if the scan came within one
+               reading of BT's first. Its 0xFFFF plus APP_STICK_RISE_MIN
+               then wraps to 99, below any slot reading (empty about 300),
+               so the BC condition fails and nothing is judged - the same
+               as testing it (2026-11-20, flash). */
+            wT = s_atReact[0].wWinMin;      /* wT is free again here */
+            if ((wT != 0xFFFFu)
+                && (s_seq.awResultBand[OPTIC_CH_BT]
+                    < (uint16_t)(wT + APP_STICK_RISE_MIN))
+                && (s_seq.awResultBand[OPTIC_CH_BC]
+                    < (uint16_t)(s_atReact[1].wWinMin + APP_STICK_RISE_MIN)))
+            {
+                s_SequenceError(APP_ERR_STICK_FAIL);
+                break;
+            }
+#endif
             if (s_seq.awResult[SEQ_RES_C] < APP_C_LINE_THRESHOLD)
             {
                 s_SequenceError(APP_ERR_C_LINE_FAIL);
@@ -1035,17 +1144,6 @@ Ret_t APP_CTRL_Sequence_ResetTestCount(void)
     return APP_DATA_Record_SetTestCount(0u);
 }
 
-Ret_t APP_CTRL_Sequence_RestartQc(void)
-{
-    (void)APP_DATA_Record_SetInsertCount(0u);
-    (void)APP_DATA_Record_SetTestCount(0u);
-    (void)APP_DATA_Record_SetError(0u, (uint8_t)APP_ERR_NONE);
-
-    s_ClearRun();
-    s_GoStep(APP_SEQ_IDLE);
-
-    return RET_OK;
-}
 
 APP_CTRL_Sequence_Step APP_CTRL_Sequence_GetStep(void)
 {

@@ -22,7 +22,10 @@ Ret_t HW_EEPROM_Read(uint16_t wOffset, uint8_t *p_bBuf, uint16_t wLen)
     {
         return RET_ERR_NULL;
     }
-    if (((uint32_t)wOffset + (uint32_t)wLen) > (uint32_t)HW_EEPROM_SIZE_BYTES)
+    /* Offset + length past the end. The same test as the 32-bit sum, done
+       by subtraction so 16 bits cannot wrap (2026-11-20, flash). */
+    if ((wLen > (uint16_t)HW_EEPROM_SIZE_BYTES)
+        || (wOffset > (uint16_t)((uint16_t)HW_EEPROM_SIZE_BYTES - wLen)))
     {
         return RET_ERR_RANGE;
     }
@@ -44,7 +47,9 @@ Ret_t HW_EEPROM_Write(uint16_t wOffset, const uint8_t *p_bBuf, uint16_t wLen)
     {
         return RET_ERR_NULL;
     }
-    if (((uint32_t)wOffset + (uint32_t)wLen) > (uint32_t)HW_EEPROM_SIZE_BYTES)
+    /* Same range test as in HW_EEPROM_Read, 16-bit, no wrap. */
+    if ((wLen > (uint16_t)HW_EEPROM_SIZE_BYTES)
+        || (wOffset > (uint16_t)((uint16_t)HW_EEPROM_SIZE_BYTES - wLen)))
     {
         return RET_ERR_RANGE;
     }

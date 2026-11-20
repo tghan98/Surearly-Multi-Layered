@@ -1,0 +1,25 @@
+﻿필드,Firmware Ver.,Real Firmware Ver.,LOT. Upper,LOT. Lower
+데이터(String),v2.1,v2.2T3,HCGM,26003
+
+필드,Insert Count,Test Complete Count
+데이터(Value),12,5
+
+필드,T,BT,BC,C
+데이터(Value),3734,3704,3388,3710
+
+필드,BT 최저(원래),BC 최저(원래),BT 최저(다수결),BC 최저(다수결)
+최저값(Value),688,687,411,398
+
+필드,Wake Fail Min,Wake Fail Max
+데이터(Value),0,0
+
+필드,적용 컷오프 T,적용 컷오프 C
+기기값(Value),1080,1005
+
+필드,Gain CH1,Gain CH2,Gain CH3,Gain CH4,ET,EBT,EBC,EC,RT,RBT,RBC,RC,T Intensity,C Intensity,Yes(1)/No(0),Error Step,Error Code
+1,833,1239,1323,1039,1216,1196,1198,1206,424,423,411,394,1014,1052,0,6,ERROR STICK FAIL
+2,881,1331,1420,1126,0,0,0,0,0,0,0,0,0,0,0,1,ERROR STICK REMOVE
+3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,ERROR OPTIC FAIL CH0
+4,831,1253,1336,1053,1205,1197,1195,1206,0,0,0,0,0,0,0,2,ERROR STICK REMOVE
+5,829,1259,1353,1062,1202,1196,1199,1206,1061,1040,1032,903,985,1149,0,0,ERROR NONE
+6,824,1247,1335,1047,1197,1196,1194,1204,399,409,399,380,1024,1060,0,0,ERROR NONE

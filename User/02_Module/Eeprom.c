@@ -49,7 +49,10 @@ Ret_t Eeprom_Write(uint16_t wOffset, const uint8_t *p_bBuf, uint16_t wLen)
     {
         return RET_ERR_NULL;
     }
-    if (((uint32_t)wOffset + (uint32_t)wLen) > (uint32_t)HW_EEPROM_SIZE_BYTES)
+    /* Offset + length past the end, by subtraction so 16 bits cannot wrap:
+       the same test as the 32-bit sum it replaced (2026-11-20, flash). */
+    if ((wLen > (uint16_t)HW_EEPROM_SIZE_BYTES)
+        || (wOffset > (uint16_t)((uint16_t)HW_EEPROM_SIZE_BYTES - wLen)))
     {
         return RET_ERR_RANGE;
     }

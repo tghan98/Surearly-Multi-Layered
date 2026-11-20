@@ -45,7 +45,9 @@ typedef struct
 __near static Meas_Ctx s_meas;
 
 /* Private function prototypes -----------------------------------------------*/
+#if (APP_TEST_MINLOG == 0)
 static void     s_JudgeStick(void);
+#endif
 static Ret_t    s_StartOptic(Optic_Ch tCh);
 static void     s_TuneTry(uint16_t wTime);
 static void     s_TuneFirst(void);
@@ -96,12 +98,14 @@ static Ret_t s_StartOptic(Optic_Ch tCh)
 /* The C channel is the one that sees the stick (old OPTIC_CH_3). A tuned
    reading is on the axis the gain-applied value used to be on (dry stick
    about 1200), so the threshold stands (2026-11-11). */
+#if (APP_TEST_MINLOG == 0)   /* the test build checks no stick (flash) */
 static void s_JudgeStick(void)
 {
     s_meas.bPresent = (Optic_GetRaw(OPTIC_CH_C)
                        < (uint16_t)APP_OPTIC_STICK_THRESHOLD_SCALED)
                       ? 0u : 1u;
 }
+#endif
 
 /* Functions -----------------------------------------------------------------*/
 Ret_t APP_EXEC_Measure_Init(void)
@@ -152,6 +156,7 @@ Ret_t APP_EXEC_Measure_StartInitial(void)
     return s_StartOptic((Optic_Ch)0u);
 }
 
+#if (APP_TEST_MINLOG == 0)
 Ret_t APP_EXEC_Measure_StartStickCheck(void)
 {
     if (s_meas.tJob != MEAS_JOB_NONE)
@@ -167,6 +172,7 @@ Ret_t APP_EXEC_Measure_StartStickCheck(void)
 
     return s_StartOptic(OPTIC_CH_C);
 }
+#endif
 
 Ret_t APP_EXEC_Measure_StartSingle(Optic_Ch tCh)
 {
@@ -216,11 +222,13 @@ Ret_t APP_EXEC_Measure_Process(void)
 
     switch (s_meas.tJob)
     {
+#if (APP_TEST_MINLOG == 0)
         case MEAS_JOB_STICK:
             s_JudgeStick();
             s_meas.tJob    = MEAS_JOB_NONE;
             s_meas.tResult = APP_EXEC_MEASURE_DONE;
             break;
+#endif
 
         case MEAS_JOB_SINGLE:
             s_meas.tJob    = MEAS_JOB_NONE;
@@ -380,10 +388,12 @@ uint8_t APP_EXEC_Measure_IsBusy(void)
     return (s_meas.tJob == MEAS_JOB_NONE) ? 0u : 1u;
 }
 
+#if (APP_TEST_MINLOG == 0)
 uint8_t APP_EXEC_Measure_IsStickPresent(void)
 {
     return s_meas.bPresent;
 }
+#endif
 
 const uint16_t *APP_EXEC_Measure_GetInitial(void)
 {

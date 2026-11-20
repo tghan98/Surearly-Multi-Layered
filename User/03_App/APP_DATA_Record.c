@@ -20,8 +20,8 @@
 #define REC_OFF_RESULT          20u
 #define REC_OFF_QC_REF         212u
 #define REC_OFF_DUMP_POS       244u
-#define REC_OFF_WAKE_FAIL_MIN  248u
-#define REC_OFF_WAKE_FAIL_MAX  250u
+/* 248..251: the old Wake Fail min / max, no longer read or written
+   (2026-11-20); the dump sends zeros there. */
 
 #define REC_SLOT_BYTES          (APP_REC_SLOT_WORDS * 2u)        /* 32 */
 #define REC_STICK_PTR_BYTES     (APP_REC_STICK_PTR_WORDS * 2u)   /* 16 */
@@ -114,12 +114,10 @@ Ret_t APP_DATA_Record_Process(void)
         {
             s_rec.bDirty |= REC_DIRTY_RESULT;
         }
-#if (APP_TEST_MINLOG == 1)
         else if (wFailOffset < REC_OFF_DUMP_POS)
         {
             s_rec.bDirty |= REC_DIRTY_QC_REF;
         }
-#endif
         else
         {
             s_rec.bDirty |= REC_DIRTY_DUMP_POS;
@@ -171,7 +169,6 @@ Ret_t APP_DATA_Record_Process(void)
             s_rec.bDirty &= (uint8_t)~REC_DIRTY_DUMP_POS;
         }
     }
-#if (APP_TEST_MINLOG == 1)
     else if ((s_rec.bDirty & REC_DIRTY_QC_REF) != 0u)
     {
         tRet = Eeprom_Write(REC_OFF_QC_REF, (const uint8_t *)s_rec.awQcRef,
@@ -181,7 +178,6 @@ Ret_t APP_DATA_Record_Process(void)
             s_rec.bDirty &= (uint8_t)~REC_DIRTY_QC_REF;
         }
     }
-#endif
     else
     {
         /* nothing left */
@@ -233,8 +229,20 @@ Ret_t APP_DATA_Record_SetStickPtr(const uint16_t *p_wData)
     return RET_OK;
 }
 
-#if (APP_TEST_MINLOG == 1)
-/* Test build only: the minimum log rides in the QC words of the dump. */
+/* The reaction log rides in the QC words of the dump (both builds since
+   2026-11-20; the QC reference itself went on 2026-11-13). The product
+   keeps only the two window lows, set by the small setter below (flash). */
+#if (APP_TEST_MINLOG == 0)
+/* Words 0 and 1 (the test build's single-reading lows) are left as they
+   are: a unit that once ran a test build may still show those there
+   (2026-11-20, flash). Only words 2 and 3 are the product's. */
+void APP_DATA_Record_SetReactLog(uint16_t wBt, uint16_t wBc)
+{
+    s_rec.awQcRef[2] = wBt;
+    s_rec.awQcRef[3] = wBc;
+    s_rec.bDirty |= REC_DIRTY_QC_REF;
+}
+#else
 Ret_t APP_DATA_Record_SetQcRef(const uint16_t *p_wData)
 {
     uint8_t bIdx;
@@ -338,19 +346,6 @@ Ret_t APP_DATA_Record_GetStatus(uint16_t *p_wOut)
     {
         p_wOut[bIdx] = (uint16_t)s_rec.abStatus[bIdx];
     }
-
-    return RET_OK;
-}
-
-Ret_t APP_DATA_Record_GetWakeFail(uint16_t *p_wMin, uint16_t *p_wMax)
-{
-    if ((p_wMin == NULL) || (p_wMax == NULL))
-    {
-        return RET_ERR_NULL;
-    }
-
-    (void)Eeprom_Read(REC_OFF_WAKE_FAIL_MIN, (uint8_t *)p_wMin, 2u);
-    (void)Eeprom_Read(REC_OFF_WAKE_FAIL_MAX, (uint8_t *)p_wMax, 2u);
 
     return RET_OK;
 }

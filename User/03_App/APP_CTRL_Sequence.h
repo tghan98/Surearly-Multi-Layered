@@ -78,14 +78,6 @@ Ret_t APP_CTRL_Sequence_Process(void);
   */
 Ret_t APP_CTRL_Sequence_ResetTestCount(void);
 
-/**
-  * @brief  Clears the stored records and returns to IDLE. Development only.
-  * @note   Layer: App (control). Blocking: no. ISR: no.
-  *         Same-layer call from APP_CTRL_Cmd on the Q command.
-  * @retval RET_OK
-  */
-Ret_t APP_CTRL_Sequence_RestartQc(void);
-
 /* Getters (cannot fail) -----------------------------------------------------*/
 /**
   * @brief  Which step the test is on.

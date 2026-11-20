@@ -23,11 +23,6 @@
 #define CMD_LOT_PREFIX_LEN       4u
 #define CMD_LOT_SUFFIX_LEN       5u
 
-/* Upper bound on the flush before a Q reset. Four blocks, one per pass,
-   land in about 50 ms when the EEPROM answers. Ten times that, so a dead
-   EEPROM cannot leave the unit sitting with no reaction at all. */
-#define CMD_FLUSH_TIMEOUT_TK     HW_TICK_MS(500u)
-
 /* Private variables ---------------------------------------------------------*/
 /* C drops the terminating NUL when a string literal exactly fills the array,
    which is the fixed-width form the parser expects. */
@@ -35,7 +30,6 @@ static const char s_acVerLabel[CMD_VER_LABEL_LEN]   = APP_VER_LABEL;
 static const char s_acVerBuild[CMD_VER_BUILD_LEN]   = APP_VER_BUILD;
 static const char s_acLotPrefix[CMD_LOT_PREFIX_LEN] = APP_LOT_PREFIX;
 static const char s_acLotSuffix[CMD_LOT_SUFFIX_LEN] = APP_LOT_SUFFIX;
-static const char s_acAck[4] = { 'O', 'K', '\r', '\n' };
 
 /* __near: kept out of the 256-byte page zero, see EWSTM8/MFx_Layered.icf. */
 __near static uint16_t s_awBuf[APP_REC_SLOT_WORDS];
@@ -80,8 +74,6 @@ static void s_SendWords(const uint16_t *p_wSrc, uint8_t bCount)
 static void s_Dump(void)
 {
     const uint16_t *p_wSrc;
-    uint16_t        wMin = 0u;
-    uint16_t        wMax = 0u;
     uint8_t         bStart;
     uint8_t         bIdx;
     uint8_t         bSlot;
@@ -114,9 +106,11 @@ static void s_Dump(void)
     (void)APP_DATA_Record_GetQcRef(&p_wSrc);
     s_SendWords(p_wSrc, (uint8_t)APP_REC_QC_REF_WORDS);
 
-    (void)APP_DATA_Record_GetWakeFail(&wMin, &wMax);
-    s_SendWord(wMin);
-    s_SendWord(wMax);
+    /* Wake Fail min / max: the optical wake gate it recorded went on
+       2026-11-10 and nothing writes it now, so two zero words keep the
+       offsets (2026-11-20, flash for the end-of-run removal check). */
+    s_SendWord(0u);
+    s_SendWord(0u);
 
     /* 5. The cut-off values this build was actually compiled with. The QC
           program used to show what the lot sheet says the unit should hold;
@@ -139,7 +133,6 @@ Ret_t APP_CTRL_Cmd_Process(void)
 {
     uint8_t  bCmd;
     uint8_t  bUpper;
-    uint16_t wStart;
 
     if (PcComm_GetCmd(&bCmd) == 0u)
     {
@@ -160,29 +153,10 @@ Ret_t APP_CTRL_Cmd_Process(void)
             (void)APP_CTRL_Sequence_ResetTestCount();
             break;
 
-        case 'Q':
-            (void)APP_CTRL_Sequence_RestartQc();
-
-            /* RestartQc() only marks the counters dirty; the EEPROM write
-               itself happens in APP_DATA_Record_Process(), one block per
-               10 ms pass. A reset before those land throws the reset away -
-               the unit comes back reading the OLD counts out of EEPROM.
-               So drive the write here and wait for it, bounded.
-               (found on the bench 2026-11-03, fixed the same day) */
-            wStart = HW_Tick_Get();
-            while ((APP_DATA_Record_IsBusy() != 0u)
-                   && (HW_Tick_Elapsed(wStart) < CMD_FLUSH_TIMEOUT_TK))
-            {
-                (void)APP_DATA_Record_Process();
-                (void)Eeprom_Process();
-            }
-
-            s_Send((const uint8_t *)s_acAck, 4u);
-            /* HW_UART_Write only returns once the last byte has left the
-               shift register, so the reply is on the wire before this. */
-            HW_PWR_SystemReset();
-            break;
-
+        /* 'Q' (QC session reset) was removed on 2026-11-20: it existed to
+           clear the insert count while the QC reference was in use, which
+           went on 2026-11-13, and its flash was needed for the end-of-run
+           removal check. It now falls under "unknown". */
         default:
             /* Unknown letters are ignored without a reply. */
             break;

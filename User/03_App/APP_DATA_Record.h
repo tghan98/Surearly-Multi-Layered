@@ -104,15 +104,25 @@ Ret_t APP_DATA_Record_SetError(uint8_t bStep, uint8_t bCode);
 Ret_t APP_DATA_Record_SetStickPtr(const uint16_t *p_wData);
 
 /**
-  * @brief  Test build only (APP_TEST_MINLOG 1): stores four words in the QC
-  *         reference slot of the dump. Written on a later pass. Production
-  *         builds keep no QC reference (hs.kim 2026-11-12); the slot is still
-  *         sent, frozen, for the 249-byte dump format.
+  * @brief  Stores four words in the QC reference slot of the dump, written
+  *         on a later pass. No QC reference since 2026-11-13 (hs.kim
+  *         2026-11-12); since 2026-11-20 the slot carries the reaction log
+  *         of the end-of-run removal check (see APP_DATA_Config.h).
+  *         Test build (APP_TEST_MINLOG 1) only; the product uses
+  *         APP_DATA_Record_SetReactLog().
   * @param  p_wData : APP_REC_QC_REF_WORDS words, must not be NULL
   * @note   Layer: App (data). Blocking: no. ISR: no.
   * @retval RET_OK, RET_ERR_NULL
   */
 Ret_t APP_DATA_Record_SetQcRef(const uint16_t *p_wData);
+
+/**
+  * @brief  Product build: stores the two reaction window lows in the QC
+  *         slot, words 2 (BT low) and 3 (BC low); words 0 and 1 are left
+  *         as they are. Written on a later pass.
+  * @note   Layer: App (data). Blocking: no. ISR: no. Cannot fail.
+  */
+void APP_DATA_Record_SetReactLog(uint16_t wBt, uint16_t wBc);
 
 /**
   * @brief  Stores one finished test into the next slot, newest-first order
@@ -170,16 +180,6 @@ Ret_t APP_DATA_Record_GetQcRef(const uint16_t **p_wData);
   */
 Ret_t APP_DATA_Record_GetStatus(uint16_t *p_wOut);
 
-/**
-  * @brief  Stored wake-gate fail range. Nothing writes it since the optical
-  *         wake gate was replaced by the switch check (2026-11-10); kept so
-  *         the dump format and the PC parser stay unchanged.
-  * @param  p_wMin : out, must not be NULL
-  * @param  p_wMax : out, must not be NULL
-  * @note   Layer: App (data). Blocking: no. ISR: no.
-  * @retval RET_OK, RET_ERR_NULL
-  */
-Ret_t APP_DATA_Record_GetWakeFail(uint16_t *p_wMin, uint16_t *p_wMax);
 
 /**
   * @brief  Pointer to the mirrored initial stick readings.
