@@ -60,7 +60,8 @@ static uint8_t s_IsCmdLetter(uint8_t bData)
     bUpper = ((bData >= 'a') && (bData <= 'z'))
              ? (uint8_t)(bData - ('a' - 'A')) : bData;
 
-    return ((bUpper == 'M') || (bUpper == 'R') || (bUpper == 'Q')) ? 1u : 0u;
+    /* 'Q' (QC session reset) went on 2026-11-20 with its handler. */
+    return ((bUpper == 'M') || (bUpper == 'R')) ? 1u : 0u;
 }
 
 static void s_Parse(uint8_t bData)

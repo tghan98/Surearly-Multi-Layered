@@ -12,17 +12,11 @@ OUTPUT = HERE / "multi-production.html"
 
 BLOCKS = {
     "reset-style": "css",
-    "qc-style": "css",
     "reset-button": "html",
-    "qc-button": "html",
     "reset-notice": "html",
-    "qc-notice": "html",
     "reset-ref": "js",
-    "qc-ref": "js",
     "reset-status": "js",
-    "qc-status": "js",
     "reset-handler": "js",
-    "qc-handler": "js",
 }
 
 

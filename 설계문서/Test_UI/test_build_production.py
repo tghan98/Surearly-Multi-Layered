@@ -18,7 +18,7 @@ class ProductionBuildTests(unittest.TestCase):
             self.assertIn(kept, output)
 
     def test_missing_marker_is_rejected(self):
-        start = marker("qc-handler", BLOCKS["qc-handler"], "START")
+        start = marker("reset-handler", BLOCKS["reset-handler"], "START")
         with self.assertRaises(ValueError):
             generate(self.source.replace(start, "", 1))
 
