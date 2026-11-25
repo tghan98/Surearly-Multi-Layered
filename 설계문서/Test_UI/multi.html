@@ -17,6 +17,7 @@
     --accent-hover: #1d4ed8;
     --danger: #dc2626;
     --ok: #16a34a;
+    --hold: #ea580c;   /* 기기 선별 HOLD: 불량 확정이 아니라 보류라서 빨강 대신 주황 */
     --mono: "Consolas", "Menlo", "Courier New", monospace;
   }
   * { box-sizing: border-box; }
@@ -394,6 +395,34 @@
   table.acc-table td.acc-wrap { white-space: normal; min-width: 72px; line-height: 1.25; }
   .btn-row-del { padding: 1px 6px; }
 
+  /* 기기 선별 (2026-11-25) */
+  .sort-verdict {
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+    padding: 14px 20px; margin-bottom: 8px;
+    border: 2px solid var(--border); border-radius: 10px; background: #f8f9fb;
+  }
+  .sort-verdict.pass { border-color: var(--ok); background: rgba(22, 163, 74, 0.08); }
+  .sort-verdict.hold { border-color: var(--hold); background: rgba(234, 88, 12, 0.08); }
+  .sort-big { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: 0.02em; min-width: 260px; }
+  .sort-verdict.pass .sort-big { color: var(--ok); }
+  .sort-verdict.hold .sort-big { color: var(--hold); }
+  .sort-verdict.none .sort-big { font-size: 28px; color: var(--muted); }
+  .sort-side { display: flex; flex-direction: column; gap: 6px; }
+  .sort-why { font-size: 17px; font-weight: 700; }
+  .sort-reader { font-size: 13px; color: var(--muted); }
+  table.sort-items { font-size: 13px; width: auto; }
+  table.sort-items th, table.sort-items td { padding: 3px 10px; }
+  table.sort-items td.label { text-align: left; font-family: inherit; }
+  td.j-pass { color: var(--ok); font-weight: 700; }
+  td.j-hold { color: var(--hold); font-weight: 700; }
+  .sort-summary { font-size: 13px; margin-bottom: 6px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .sort-summary b { font-family: var(--mono); }
+  #sortResult {
+    flex: 1; min-height: 0; overflow: auto;
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  #sortResult .acc-empty { padding: 12px; }
+
   /* 통신 기록: 접힌 한 줄. 펼치면 예전과 같다. */
   details.term { padding: 8px 14px; }
   details.term > summary {
@@ -412,7 +441,7 @@
   <header class="topbar">
     <div class="topbar-title">
       <h1>슈얼리멀티 QC 프로그램</h1>
-      <div class="sub">v1.2 (2026-11-25) · Baud Rate <b>9600</b> · Data Bits <b>8</b> · Stop Bits <b>1</b> · Parity <b>None</b></div>
+      <div class="sub">v1.3 (2026-11-25) · Baud Rate <b>9600</b> · Data Bits <b>8</b> · Stop Bits <b>1</b> · Parity <b>None</b></div>
     </div>
     <div class="topbar-port">
       <button id="btnSelect" class="btn-select">포트 선택</button>
@@ -428,6 +457,7 @@
   <div class="tabs">
     <button class="tab-btn" data-tab="tabQc">QC 검사</button>
     <button class="tab-btn" data-tab="tabDetail">기기 상세 이력</button>
+    <button class="tab-btn" data-tab="tabSort">기기 선별</button>
   </div>
 
   <div id="tabQc" class="tab-page">
@@ -470,6 +500,27 @@
   </div>
 
 
+  <!-- 기기 선별 (2026-11-25 회의): 빈 스틱을 꽂았다가 물방울이 뜨면 빼서
+       STICK REMOVE로 저장한 뒤 읽는다. 튜닝 전 초기값 T, BT로 PASS / HOLD를
+       띄운다. HOLD는 불량 확정이 아니라 종류별로 따로 빼 두는 것이다. -->
+  <div id="tabSort" class="tab-page">
+    <div class="panel panel-fill">
+      <div class="row">
+        <label class="opt">리더기 번호 <input id="sortReader" class="acc-input" type="text" placeholder="예: 3"></label>
+        <button id="btnSortRead" class="btn-service" disabled>읽고 판정</button>
+        <span class="dump-progress js-dump-progress"></span>
+        <span class="row-spacer"></span>
+        <span id="sortCount" class="dump-progress"></span>
+        <button id="btnSortCsv" class="btn-select" disabled>선별 CSV 저장</button>
+        <button id="btnSortClear" class="btn-clear btn-clear-full" disabled>선별 비우기</button>
+      </div>
+      <div id="sortVerdict"></div>
+      <div id="sortSummary" class="sort-summary"></div>
+      <div id="sortResult"></div>
+      <div class="notice">빈 스틱을 꽂고 물방울이 뜨면 뺀 뒤(STICK REMOVE) 지그에 올려 읽습니다. HOLD 1 = T 초기값 3700 초과, HOLD 2 = T/BT 비율 0.85 미만, HOLD 3 = 둘 다. 종류별로 따로 모아 두세요.</div>
+    </div>
+  </div>
+
   <!-- 통신 기록은 평소 접어 둔다. QC가 보는 칸이 아니다. -->
   <details class="panel term">
     <summary>통신 기록</summary>
@@ -503,6 +554,7 @@
   // DEV-ONLY:reset-ref END
   const btnRawDump = document.getElementById('btnRawDump');
   const btnAccRead = document.getElementById('btnAccRead');
+  const btnSortRead = document.getElementById('btnSortRead');
   const btnSaveCsv = document.getElementById('btnSaveCsv');
   const btnExportPdf = document.getElementById('btnExportPdf');
   const sendInput = document.getElementById('sendInput');
@@ -613,6 +665,7 @@
     // DEV-ONLY:reset-status END
     btnRawDump.disabled = !connected;
     btnAccRead.disabled = !connected;
+    btnSortRead.disabled = !connected;
   }
 
   function describePort(p) {
@@ -755,16 +808,17 @@
   // DEV-ONLY:reset-handler END
 
 
-  // addToAcc: QC 검사 탭의 "읽고 누적에 추가"에서 부를 때 true. 덤프가 다 들어와
-  // 해석까지 끝난 뒤에만 누적한다(finishRawDump). 옛 MFO_UI의 Data Load & File
-  // Store처럼 한 번 누르면 읽고 쌓는다. (2026-11-24)
-  let rawDumpAddToAcc = false;
+  // target: 다 읽은 덤프를 어디에 쓸지. 'acc' = QC 검사 탭 "읽고 누적에 추가",
+  // 'sort' = 기기 선별 탭 "읽고 판정", 'none' = 상세 이력 탭에서 보기만.
+  // 덤프가 다 들어와 해석까지 끝난 뒤에만 쌓는다(finishRawDump). 옛 MFO_UI의
+  // Data Load & File Store처럼 한 번 누르면 읽고 쌓는다. (2026-11-24, 선별 11-25)
+  let rawDumpTarget = 'none';
 
-  async function requestRawDump(addToAcc) {
+  async function requestRawDump(target) {
     if (rawDumpTailTimer) { clearTimeout(rawDumpTailTimer); rawDumpTailTimer = null; }
     rawDumpBuffer = [];
     rawDumpActive = true;
-    rawDumpAddToAcc = addToAcc;
+    rawDumpTarget = target;
     updateDumpProgress();
     const bytes = new TextEncoder().encode('M' + getLineEnding());
     const ok = await writeBytes(bytes);
@@ -772,14 +826,15 @@
       log(`TX: RawDump 요청 명령 전송 ('M')`, 'sys');
     } else {
       rawDumpActive = false;
-      rawDumpAddToAcc = false;
+      rawDumpTarget = 'none';
       if (rawDumpTailTimer) { clearTimeout(rawDumpTailTimer); rawDumpTailTimer = null; }
       updateDumpProgress();
     }
   }
 
-  btnRawDump.addEventListener('click', () => requestRawDump(false));
-  btnAccRead.addEventListener('click', () => requestRawDump(true));
+  btnRawDump.addEventListener('click', () => requestRawDump('none'));
+  btnAccRead.addEventListener('click', () => requestRawDump('acc'));
+  btnSortRead.addEventListener('click', () => requestRawDump('sort'));
 
   function updateDumpProgress() {
     // 두 탭에 같은 진행 문구를 띄운다.
@@ -799,11 +854,12 @@
       : size === RAWDUMP_LEGACY_TOTAL_BYTES ? ' — 구 형식, QC 기준값 미포함'
       : size === RAWDUMP_NEW_BYTES ? ' — 적용 컷오프 미포함' : '';
     log(`RawDump 수신 완료 (${size} bytes)${kind}`, 'sys');
-    const addToAcc = rawDumpAddToAcc;
-    rawDumpAddToAcc = false;
+    const target = rawDumpTarget;
+    rawDumpTarget = 'none';
     try {
       renderRawDump(packet);
-      if (addToAcc) accAddFromDump(lastRawDumpData);
+      if (target === 'acc') accAddFromDump(lastRawDumpData);
+      if (target === 'sort') sortAddFromDump(lastRawDumpData);
     } catch (err) {
       log(`RawDump 파싱 실패: ${err.message}`, 'sys');
     }
@@ -834,7 +890,7 @@
           finishRawDump(size);
         } else {
           rawDumpActive = false;
-          rawDumpAddToAcc = false;
+          rawDumpTarget = 'none';
           rawDumpBuffer = [];
           updateDumpProgress();
           log(`RawDump 수신 불완전 (${size} bytes)`, 'sys');
@@ -1370,6 +1426,155 @@
   });
 
   renderAcc();
+
+  // ---- 기기 선별 (2026-11-25, 김효신·유호승 수석님 회의) -----------------
+  // 빈 스틱을 꽂을 때 재는 튜닝 전 초기값(초기 측정값 T, BT)으로 리더기를 나눈다.
+  //   HOLD 1: T 초기값 > 3700        (T가 너무 밝음. 수거해서 더 본다)
+  //   HOLD 2: T / BT 초기값 < 0.85   (T만 어두움. 13, 15, 20, 22, 25번 유형)
+  //   HOLD 3: 둘 다
+  // HOLD는 불량 확정이 아니라 종류별로 빼 두는 것이다(사용자: FAIL 대신 HOLD).
+  // 경계값(3700, 정확히 0.85)은 PASS. 비율은 정수로 비교해 반올림 오차가 없다.
+  // 펌웨어는 초기 측정을 마치면 바로 이 값을 EEPROM에 넣는다(APP_CTRL_Sequence.c,
+  // APP_DATA_Record_SetStickPtr). 그래서 꽂았다 빼서 STICK REMOVE로 끝내도 읽힌다.
+  const SORT_T_MAX = 3700;
+  const SORT_RATIO_MIN_PCT = 85;
+  const SORT_LABELS = ['PASS', 'HOLD 1', 'HOLD 2', 'HOLD 3'];
+  const SORT_WHY = ['양품', 'T 초기값 3700 초과', 'T/BT 비율 0.85 미만', '두 조건 모두 (T 3700 초과 + 비율 0.85 미만)'];
+
+  const sortReaderEl = document.getElementById('sortReader');
+  const btnSortCsv = document.getElementById('btnSortCsv');
+  const btnSortClear = document.getElementById('btnSortClear');
+  const sortCountEl = document.getElementById('sortCount');
+  const sortVerdictEl = document.getElementById('sortVerdict');
+  const sortSummaryEl = document.getElementById('sortSummary');
+  const sortResultEl = document.getElementById('sortResult');
+
+  // 판정 불가(값이 없거나 0)면 null.
+  function sortJudge(sT, sBT) {
+    if (!Number.isInteger(sT) || !Number.isInteger(sBT) || sT <= 0 || sBT <= 0) return null;
+    const hold1 = sT > SORT_T_MAX;
+    const hold2 = sT * 100 < sBT * SORT_RATIO_MIN_PCT;
+    return { hold1, hold2, code: (hold1 ? 1 : 0) + (hold2 ? 2 : 0), ratio: (sT / sBT).toFixed(3) };
+  }
+
+  let sortRows = [];
+  let sortLastId = null;
+
+  function renderSortVerdict(row, d) {
+    if (!row) {
+      const got = d ? `${d.initialStick[0].value} / ${d.initialStick[1].value}` : '-';
+      sortVerdictEl.innerHTML = `<div class="sort-verdict none"><div class="sort-big">판정 불가</div>
+        <div class="sort-side"><div class="sort-why">초기 측정값이 없습니다 (T / BT: ${accEsc(got)})</div>
+        <div class="sort-reader">빈 스틱을 꽂아 물방울이 뜬 뒤 빼고 다시 읽어 주세요.</div></div></div>`;
+      return;
+    }
+    const j = bad => (bad ? '<td class="j-hold">HOLD</td>' : '<td class="j-pass">PASS</td>');
+    sortVerdictEl.innerHTML = `<div class="sort-verdict ${row.code === 0 ? 'pass' : 'hold'}">
+      <div class="sort-big">${SORT_LABELS[row.code]}</div>
+      <div class="sort-side">
+        <div class="sort-why">${accEsc(SORT_WHY[row.code])}</div>
+        <div class="sort-reader">리더기 ${accEsc(row.reader || '-')} · 가장 최근 기록: ${accEsc(row.lastErr)}</div>
+        <table class="sort-items">
+          <thead><tr><th>항목</th><th>값</th><th>기준</th><th>판정</th></tr></thead>
+          <tbody>
+            <tr><td class="label">T 초기값 (S_T)</td><td>${row.sT}</td><td>3700 이하</td>${j(row.hold1)}</tr>
+            <tr><td class="label">BT 초기값 (S_BT)</td><td>${row.sBT}</td><td></td><td></td></tr>
+            <tr><td class="label">S_T / S_BT</td><td>${row.ratio}</td><td>0.85 이상</td>${j(row.hold2)}</tr>
+          </tbody>
+        </table>
+      </div></div>`;
+  }
+
+  function sortAddFromDump(d) {
+    if (!d || !d.initialStick) return;
+    const sT = d.initialStick[0].value;
+    const sBT = d.initialStick[1].value;
+    const r = sortJudge(sT, sBT);
+    if (!r) {
+      renderSortVerdict(null, d);
+      log(`초기 측정값이 없어 판정하지 않았습니다 (T ${sT}, BT ${sBT}).`, 'sys');
+      return;
+    }
+    sortLastId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const row = {
+      id: sortLastId,
+      reader: sortReaderEl.value.trim(),
+      lot: `${d.lotUpper}${d.lotLower}`,
+      fw: d.realFirmwareVer,
+      time: accNow(),
+      sT, sBT, ratio: r.ratio, hold1: r.hold1, hold2: r.hold2, code: r.code,
+      lastErr: d.records && d.records[0] ? describeErrorCode(d.records[0].errorCode) : EMPTY_VALUE,
+    };
+    sortRows.push(row);
+    renderSortVerdict(row);
+    renderSort();
+    log(`기기 선별: 리더기 ${row.reader || '-'} → ${SORT_LABELS[row.code]} (T ${sT}, BT ${sBT}, 비율 ${r.ratio})`, 'sys');
+  }
+
+  const SORT_HEADERS = ['저장 시각', '리더기 번호', 'LOT', 'FW', 'T 초기값 (S_T)', 'BT 초기값 (S_BT)', 'S_T / S_BT', '판정'];
+  const sortCells = row => [row.time, row.reader || '-', row.lot, row.fw, row.sT, row.sBT, row.ratio, SORT_LABELS[row.code]];
+
+  function renderSort() {
+    btnSortCsv.disabled = sortRows.length === 0;
+    btnSortClear.disabled = sortRows.length === 0;
+    sortCountEl.textContent = sortRows.length === 0 ? '' : `${sortRows.length}건`;
+    const n = [0, 0, 0, 0];
+    sortRows.forEach(row => { n[row.code]++; });
+    sortSummaryEl.innerHTML = sortRows.length === 0 ? ''
+      : SORT_LABELS.map((l, i) => `<span>${l} <b>${n[i]}</b>대</span>`).join('');
+    if (sortRows.length === 0) {
+      sortResultEl.innerHTML = '<div class="acc-empty">아직 판정한 리더기가 없습니다.</div>';
+      return;
+    }
+    const head = '<th></th>' + SORT_HEADERS.map(h => `<th>${accEsc(h)}</th>`).join('');
+    const body = sortRows.map(row => {
+      const cells = sortCells(row).map((v, k, a) => (k === a.length - 1
+        ? `<td class="${row.code === 0 ? 'j-pass' : 'j-hold'}">${accEsc(v)}</td>`
+        : `<td>${accEsc(v)}</td>`)).join('');
+      return `<tr class="${row.id === sortLastId ? 'latest' : ''}">
+        <td><button class="btn-row-del" data-sort-id="${accEsc(row.id)}">삭제</button></td>${cells}</tr>`;
+    }).join('');
+    sortResultEl.innerHTML =
+      `<table class="acc-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  sortResultEl.addEventListener('click', (e) => {
+    const id = e.target && e.target.getAttribute && e.target.getAttribute('data-sort-id');
+    if (!id) return;
+    sortRows = sortRows.filter(row => row.id !== id);
+    renderSort();
+  });
+
+  function buildSortCsv() {
+    const rows = [SORT_HEADERS, ...sortRows.map(sortCells)];
+    return rows.map(row => row.map(csvEscape).join(',')).join('\r\n');
+  }
+
+  btnSortCsv.addEventListener('click', () => {
+    if (sortRows.length === 0) return;
+    const blob = new Blob(['﻿' + buildSortCsv()], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `기기선별_${formatTimestamp()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    log(`기기 선별 결과 ${sortRows.length}건을 CSV 파일로 저장했습니다.`, 'sys');
+  });
+
+  btnSortClear.addEventListener('click', () => {
+    if (sortRows.length === 0) return;
+    if (!confirm(`기기 선별 결과 ${sortRows.length}건을 모두 지웁니다. 선별 CSV로 저장하셨습니까?`)) return;
+    sortRows = [];
+    sortLastId = null;
+    sortVerdictEl.innerHTML = '';
+    renderSort();
+    log('기기 선별 결과를 비웠습니다.', 'sys');
+  });
+
+  renderSort();
 
   const PDF_REPORT_STYLE = `
     body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; padding: 24px; color: #1b1e24; }
