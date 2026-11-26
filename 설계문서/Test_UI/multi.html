@@ -441,7 +441,7 @@
   <header class="topbar">
     <div class="topbar-title">
       <h1>슈얼리멀티 QC 프로그램</h1>
-      <div class="sub">v1.3 (2026-11-25) · Baud Rate <b>9600</b> · Data Bits <b>8</b> · Stop Bits <b>1</b> · Parity <b>None</b></div>
+      <div class="sub">v1.3.2 (2026-11-26) · Baud Rate <b>9600</b> · Data Bits <b>8</b> · Stop Bits <b>1</b> · Parity <b>None</b></div>
     </div>
     <div class="topbar-port">
       <button id="btnSelect" class="btn-select">포트 선택</button>
@@ -517,7 +517,7 @@
       <div id="sortVerdict"></div>
       <div id="sortSummary" class="sort-summary"></div>
       <div id="sortResult"></div>
-      <div class="notice">빈 스틱을 꽂고 물방울이 뜨면 뺀 뒤(STICK REMOVE) 지그에 올려 읽습니다. HOLD 1 = T 초기값 3700 초과, HOLD 2 = T/BT 비율 0.85 미만, HOLD 3 = 둘 다. 종류별로 따로 모아 두세요.</div>
+      <div class="notice">빈 스틱을 꽂고 물방울이 뜨면 뺀 뒤(STICK REMOVE) 지그에 올려 읽습니다. HOLD 1 = T 초기값 3730 초과, HOLD 2 = T/BT 비율 0.85 미만, HOLD 3 = 둘 다. 종류별로 따로 모아 두세요.</div>
     </div>
   </div>
 
@@ -1429,17 +1429,19 @@
 
   // ---- 기기 선별 (2026-11-25, 김효신·유호승 수석님 회의) -----------------
   // 빈 스틱을 꽂을 때 재는 튜닝 전 초기값(초기 측정값 T, BT)으로 리더기를 나눈다.
-  //   HOLD 1: T 초기값 > 3700        (T가 너무 밝음. 수거해서 더 본다)
+  //   HOLD 1: T 초기값 > 3730        (T가 너무 밝음. 수거해서 더 본다)
+  //           11-25 회의는 3700. 11-26 3740 시험(추가 리더기 20대에서 3700은 12대를
+  //           보류했고, 3700~3770은 포화 구간이라 판정이 흔들림). 11-26 합의로 3730.
   //   HOLD 2: T / BT 초기값 < 0.85   (T만 어두움. 13, 15, 20, 22, 25번 유형)
   //   HOLD 3: 둘 다
   // HOLD는 불량 확정이 아니라 종류별로 빼 두는 것이다(사용자: FAIL 대신 HOLD).
-  // 경계값(3700, 정확히 0.85)은 PASS. 비율은 정수로 비교해 반올림 오차가 없다.
+  // 경계값(3730, 정확히 0.85)은 PASS. 비율은 정수로 비교해 반올림 오차가 없다.
   // 펌웨어는 초기 측정을 마치면 바로 이 값을 EEPROM에 넣는다(APP_CTRL_Sequence.c,
   // APP_DATA_Record_SetStickPtr). 그래서 꽂았다 빼서 STICK REMOVE로 끝내도 읽힌다.
-  const SORT_T_MAX = 3700;
+  const SORT_T_MAX = 3730;
   const SORT_RATIO_MIN_PCT = 85;
   const SORT_LABELS = ['PASS', 'HOLD 1', 'HOLD 2', 'HOLD 3'];
-  const SORT_WHY = ['양품', 'T 초기값 3700 초과', 'T/BT 비율 0.85 미만', '두 조건 모두 (T 3700 초과 + 비율 0.85 미만)'];
+  const SORT_WHY = ['양품', `T 초기값 ${SORT_T_MAX} 초과`, 'T/BT 비율 0.85 미만', `두 조건 모두 (T ${SORT_T_MAX} 초과 + 비율 0.85 미만)`];
 
   const sortReaderEl = document.getElementById('sortReader');
   const btnSortCsv = document.getElementById('btnSortCsv');
@@ -1477,7 +1479,7 @@
         <table class="sort-items">
           <thead><tr><th>항목</th><th>값</th><th>기준</th><th>판정</th></tr></thead>
           <tbody>
-            <tr><td class="label">T 초기값 (S_T)</td><td>${row.sT}</td><td>3700 이하</td>${j(row.hold1)}</tr>
+            <tr><td class="label">T 초기값 (S_T)</td><td>${row.sT}</td><td>${SORT_T_MAX} 이하</td>${j(row.hold1)}</tr>
             <tr><td class="label">BT 초기값 (S_BT)</td><td>${row.sBT}</td><td></td><td></td></tr>
             <tr><td class="label">S_T / S_BT</td><td>${row.ratio}</td><td>0.85 이상</td>${j(row.hold2)}</tr>
           </tbody>
