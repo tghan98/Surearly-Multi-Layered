@@ -436,7 +436,7 @@
   <header class="topbar">
     <div class="topbar-title">
       <h1>슈얼리멀티 QC 프로그램</h1>
-      <div class="sub">v1.3.2 (2026-11-26) · Baud Rate <b>9600</b> · Data Bits <b>8</b> · Stop Bits <b>1</b> · Parity <b>None</b></div>
+      <div class="sub">v1.3.3 (2026-11-27) · Baud Rate <b>9600</b> · Data Bits <b>8</b> · Stop Bits <b>1</b> · Parity <b>None</b></div>
     </div>
     <div class="topbar-port">
       <button id="btnSelect" class="btn-select">포트 선택</button>
@@ -464,6 +464,7 @@
         <span class="dump-progress js-dump-progress"></span>
         <span class="row-spacer"></span>
         <span id="accCount" class="dump-progress"></span>
+        <button id="btnAccSortNo" class="btn-select" disabled>번호순 정렬</button>
         <button id="btnAccCsv" class="btn-select" disabled>누적 CSV 저장</button>
         <button id="btnAccClear" class="btn-clear btn-clear-full" disabled>누적 비우기</button>
       </div>
@@ -500,6 +501,7 @@
         <span class="dump-progress js-dump-progress"></span>
         <span class="row-spacer"></span>
         <span id="sortCount" class="dump-progress"></span>
+        <button id="btnSortSortNo" class="btn-select" disabled>번호순 정렬</button>
         <button id="btnSortCsv" class="btn-select" disabled>선별 CSV 저장</button>
         <button id="btnSortClear" class="btn-clear btn-clear-full" disabled>선별 비우기</button>
       </div>
@@ -1204,6 +1206,7 @@
   const accReaderEl = document.getElementById('accReader');
   const btnAccCsv = document.getElementById('btnAccCsv');
   const btnAccClear = document.getElementById('btnAccClear');
+  const btnAccSortNo = document.getElementById('btnAccSortNo');
   const accCountEl = document.getElementById('accCount');
   const accResultEl = document.getElementById('accResult');
 
@@ -1313,6 +1316,7 @@
   function renderAcc() {
     btnAccCsv.disabled = accRows.length === 0;
     btnAccClear.disabled = accRows.length === 0;
+    btnAccSortNo.disabled = accRows.length < 2;
     accCountEl.textContent = accRows.length === 0 ? '' : `${accRows.length}건`;
     if (accRows.length === 0) {
       accResultEl.innerHTML = '<div class="acc-empty">아직 쌓인 결과가 없습니다.</div>';
@@ -1393,6 +1397,22 @@
     log(`누적 결과 ${accRows.length}건을 CSV 파일로 저장했습니다.`, 'sys');
   });
 
+  // 리더기 번호순 정렬 (2026-11-27). 시료 묶음과 그 순서는 그대로 두고, 묶음 안만 정렬한다.
+  // 잰 순서는 각 줄의 저장 시각에 남는다. No.는 정렬 뒤 자리 번호가 된다.
+  // 숫자가 아닌 번호(빈칸, 13-1 등)는 맨 뒤로, 같은 번호끼리는 원래 순서를 지킨다.
+  function readerOrder(a, b) {
+    const na = /^\d+$/.test(a) ? Number(a) : Infinity;
+    const nb = /^\d+$/.test(b) ? Number(b) : Infinity;
+    if (na !== nb) return na < nb ? -1 : 1;
+    return na === Infinity ? a.localeCompare(b) : 0;
+  }
+
+  btnAccSortNo.addEventListener('click', () => {
+    accRows = accGroups().flatMap(g => g.rows.slice().sort((x, y) => readerOrder(x.reader, y.reader)));
+    renderAcc();
+    log('누적 결과를 리더기 번호순으로 정렬했습니다.', 'sys');
+  });
+
   btnAccClear.addEventListener('click', () => {
     if (accRows.length === 0) return;
     if (!confirm(`누적 결과 ${accRows.length}건을 모두 지웁니다. 누적 CSV로 저장하셨습니까?`)) return;
@@ -1422,6 +1442,7 @@
   const sortReaderEl = document.getElementById('sortReader');
   const btnSortCsv = document.getElementById('btnSortCsv');
   const btnSortClear = document.getElementById('btnSortClear');
+  const btnSortSortNo = document.getElementById('btnSortSortNo');
   const sortCountEl = document.getElementById('sortCount');
   const sortVerdictEl = document.getElementById('sortVerdict');
   const sortSummaryEl = document.getElementById('sortSummary');
@@ -1495,6 +1516,7 @@
   function renderSort() {
     btnSortCsv.disabled = sortRows.length === 0;
     btnSortClear.disabled = sortRows.length === 0;
+    btnSortSortNo.disabled = sortRows.length < 2;
     sortCountEl.textContent = sortRows.length === 0 ? '' : `${sortRows.length}건`;
     const n = [0, 0, 0, 0];
     sortRows.forEach(row => { n[row.code]++; });
@@ -1540,6 +1562,12 @@
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     log(`기기 선별 결과 ${sortRows.length}건을 CSV 파일로 저장했습니다.`, 'sys');
+  });
+
+  btnSortSortNo.addEventListener('click', () => {
+    sortRows = sortRows.slice().sort((x, y) => readerOrder(x.reader, y.reader));
+    renderSort();
+    log('기기 선별 결과를 리더기 번호순으로 정렬했습니다.', 'sys');
   });
 
   btnSortClear.addEventListener('click', () => {
